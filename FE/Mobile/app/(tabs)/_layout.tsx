@@ -19,38 +19,40 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Home',
+          title: 'Trang chủ',
           tabBarIcon: ({ color }) => <MaterialIcons size={24} name="home" color={color} />,
         }}
       />
       <Tabs.Screen
         name="products"
         options={{
-          title: 'Products',
+          title: 'Sản phẩm',
           tabBarIcon: ({ color }) => <MaterialIcons size={24} name="grid-view" color={color} />,
         }}
       />
       <Tabs.Screen
         name="cart"
         options={{
-          title: 'Cart',
+          title: 'Giỏ hàng',
           tabBarIcon: ({ color }) => <MaterialIcons size={24} name="shopping-cart" color={color} />,
         }}
       />
       <Tabs.Screen
         name="orders"
         options={{
-          title: 'Orders',
+          title: 'Đơn hàng',
           tabBarIcon: ({ color }) => <MaterialIcons size={24} name="receipt" color={color} />,
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
-          title: 'Profile',
+          title: 'Tài khoản',
           tabBarIcon: ({ color }) => <MaterialIcons size={24} name="person-outline" color={color} />,
         }}
       />
+      <Tabs.Screen name="explore" options={{ href: null }} />
+      <Tabs.Screen name="account" options={{ href: null }} />
     </Tabs>
   );
 }
