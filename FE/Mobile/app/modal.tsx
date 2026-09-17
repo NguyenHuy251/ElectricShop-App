@@ -8,10 +8,10 @@ export default function ModalScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.handle} />
       <View style={styles.icon}><MaterialIcons name="check" size={34} color="#FFF" /></View>
-      <Text style={styles.title}>Order confirmed</Text>
-      <Text style={styles.message}>Thanks, Alex. Your order is being prepared and will arrive in 2-4 business days.</Text>
-      <View style={styles.card}><View><Text style={styles.label}>ORDER NUMBER</Text><Text style={styles.orderNumber}>AE-240891</Text></View><MaterialIcons name="local-shipping" size={28} color="#E76F51" /></View>
-      <Link href="/" dismissTo style={styles.link}><Text style={styles.linkText}>Back to home</Text></Link>
+      <Text style={styles.title}>Đặt hàng thành công</Text>
+      <Text style={styles.message}>Cảm ơn Alex. Đơn hàng của bạn đang được chuẩn bị và sẽ đến trong 2-4 ngày làm việc.</Text>
+      <View style={styles.card}><View><Text style={styles.label}>MÃ ĐƠN HÀNG</Text><Text style={styles.orderNumber}>AE-240891</Text></View><MaterialIcons name="local-shipping" size={28} color="#E76F51" /></View>
+      <Link href="/" dismissTo style={styles.link}><Text style={styles.linkText}>Về trang chủ</Text></Link>
     </SafeAreaView>
   );
 }

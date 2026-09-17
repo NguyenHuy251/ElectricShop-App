@@ -28,7 +28,7 @@ export default function ProductDetailScreen() {
     }
   };
 
-  if (!product) return <SafeAreaView style={styles.safe}><View style={styles.container}><Text>Loading...</Text></View></SafeAreaView>;
+  if (!product) return <SafeAreaView style={styles.safe}><View style={styles.container}><Text>Đang tải...</Text></View></SafeAreaView>;
 
   return (
     <SafeAreaView style={styles.safe}>

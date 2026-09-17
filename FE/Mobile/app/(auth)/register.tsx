@@ -38,9 +38,9 @@ export default function RegisterScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#f6f8fb' },
+  safe: { flex: 1, backgroundColor: '#F6F8FB' },
   container: { flex: 1, justifyContent: 'center', padding: 24 },
-  title: { fontSize: 28, fontWeight: '800', marginBottom: 18 },
-  input: { backgroundColor: '#fff', borderRadius: 12, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: '#e2e8f0' },
+  title: { color: '#152238', fontSize: 30, fontWeight: '800', marginBottom: 18 },
+  input: { backgroundColor: '#FFF', borderRadius: 12, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: '#E6EAF0', color: '#152238' },
   linkText: { marginTop: 18, textAlign: 'center', color: '#1d4ed8' },
 });

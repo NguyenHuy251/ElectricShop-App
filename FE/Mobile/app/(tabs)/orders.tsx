@@ -22,7 +22,7 @@ export default function OrdersScreen() {
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.container}>
-        <Text style={styles.title}>Đơn hàng</Text>
+        <Text style={styles.title}>Đơn hàng của tôi</Text>
         <FlatList
           data={orders}
           keyExtractor={(item) => String(item.ma_don_hang)}
