@@ -57,8 +57,6 @@ export default function TabLayout() {
           tabBarIcon: ({ color, focused }) => <View style={{ width: 46, height: 29, borderRadius: 12, backgroundColor: focused ? shop.soft : 'transparent', alignItems: 'center', justifyContent: 'center' }}><MaterialIcons size={22} name="person-outline" color={color} /></View>,
         }}
       />
-      <Tabs.Screen name="explore" options={{ href: null }} />
-      <Tabs.Screen name="account" options={{ href: null }} />
     </Tabs>
   );
 }
