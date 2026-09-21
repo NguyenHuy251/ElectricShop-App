@@ -1,12 +1,13 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Link, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { cartService } from '../../services/cart.service';
 import { productService } from '../../services/product.service';
 import type { Product } from '../../types';
-import { formatCurrency } from '../../utils/format';
+import { EmptyState, LoadingState, ProductCard } from '@/components/shop-ui';
+import { shop } from '@/constants/shop-theme';
 
 const fallbackCategories = [
   { label: 'Nhà bếp', icon: 'kitchen' as const, color: '#EAF5FF' },
@@ -19,13 +20,15 @@ export default function HomeScreen() {
   const [products, setProducts] = useState<Product[]>([]);
   const [cartCount, setCartCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
   const loadHome = useCallback(async () => {
+    setError(false);
     try {
       const response = await productService.getProducts({ limit: 4 });
       setProducts(response.data || []);
     } catch {
-      setProducts([]);
+      setError(true);
     } finally {
       setLoading(false);
     }
@@ -48,38 +51,41 @@ export default function HomeScreen() {
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
           <View>
-            <Text style={styles.eyebrow}>ĐIỆN GIA DỤNG</Text>
-            <Text style={styles.heading}>Mua sắm tiện hơn.</Text>
+            <Text style={styles.eyebrow}>ELECTRIC SHOP</Text>
+            <Text style={styles.heading}>Nhà tiện nghi, sống thảnh thơi.</Text>
           </View>
           <Link href="/cart" asChild>
-            <Pressable style={styles.iconButton}>
-              <MaterialIcons name="shopping-bag" size={23} color="#152238" />
+            <Pressable accessibilityLabel="Mở giỏ hàng" style={styles.iconButton}>
+              <MaterialIcons name="shopping-bag" size={23} color="#183C35" />
               {cartCount > 0 ? <View style={styles.badge}><Text style={styles.badgeText}>{cartCount > 9 ? '9+' : cartCount}</Text></View> : null}
             </Pressable>
           </Link>
         </View>
 
+        <Link href="/products" asChild><Pressable style={styles.searchBar}><MaterialIcons name="search" size={22} color={shop.muted} /><Text style={styles.searchText}>Bạn đang tìm thiết bị gì?</Text><View style={styles.searchArrow}><MaterialIcons name="tune" size={18} color={shop.primary} /></View></Pressable></Link>
         <View style={styles.hero}>
+          <View style={styles.heroCircle} />
           <View style={styles.heroCopy}>
-            <Text style={styles.heroKicker}>SẢN PHẨM MỚI</Text>
-            <Text style={styles.heroTitle}>Nâng cấp không gian sống.</Text>
-            <Text style={styles.heroText}>Thiết bị chính hãng, dễ chọn, giao hàng nhanh.</Text>
+            <Text style={styles.heroKicker}>CHĂM CHÚT TỪNG GÓC NHÀ</Text>
+            <Text style={styles.heroTitle}>{'Tiện nghi hơn.\nThảnh thơi hơn.'}</Text>
+            <Text style={styles.heroText}>Khám phá thiết bị gia dụng cho nhịp sống của bạn.</Text>
             <Link href="/products" asChild>
               <Pressable style={styles.heroButton}>
-                <Text style={styles.heroButtonText}>Xem sản phẩm</Text>
-                <MaterialIcons name="arrow-forward" size={18} color="#fff" />
+                <Text style={styles.heroButtonText}>Khám phá ngay</Text>
+                <MaterialIcons name="arrow-forward" size={18} color={shop.ink} />
               </Pressable>
             </Link>
           </View>
-          <MaterialIcons name="blender" size={100} color="#B5D4E9" style={styles.heroIcon} />
+<MaterialIcons name="blender" size={116} color="#AFCDA6" style={styles.heroIcon} />
         </View>
 
-        <SectionHeader title="Danh mục" action="Xem tất cả" href="/products" />
+        <View style={styles.promise}><MaterialIcons name="electric-bolt" size={18} color={shop.primary} /><Text style={styles.promiseText}>Tiện ích cho nhà · Cảm hứng cho cuộc sống</Text></View>
+        <SectionHeader title="Góc nhà của bạn" action="Xem tất cả" href="/products" />
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryRow}>
-          {fallbackCategories.map((category) => (
-            <Link href="/products" key={category.label} asChild>
+          {Array.from(new Set(products.map(p => p.ten_danh_muc).filter((name): name is string => Boolean(name)))).map((label, index) => ({ ...fallbackCategories[index % fallbackCategories.length], label })).map((category) => (
+            <Link href={{ pathname: '/products', params: { category: category.label } }} key={category.label} asChild>
               <Pressable style={styles.category}>
-                <View style={[styles.categoryIcon, { backgroundColor: category.color }]}><MaterialIcons name={category.icon} size={26} color="#152238" /></View>
+                <View style={[styles.categoryIcon, { backgroundColor: category.color }]}><MaterialIcons name={category.icon} size={26} color="#183C35" /></View>
                 <Text style={styles.categoryLabel}>{category.label}</Text>
               </Pressable>
             </Link>
@@ -87,22 +93,10 @@ export default function HomeScreen() {
         </ScrollView>
 
         <SectionHeader title="Sản phẩm nổi bật" action="Xem thêm" href="/products" />
-        {loading ? (
-          <View style={styles.loading}><ActivityIndicator color="#E76F51" /></View>
-        ) : (
-          <View style={styles.productRow}>
-            {products.slice(0, 2).map((product) => (
-              <Link href={{ pathname: '/product/[id]', params: { id: String(product.ma_san_pham) } }} key={product.ma_san_pham} asChild>
-                <Pressable style={styles.productCard}>
-                  <Image source={{ uri: product.hinh_anh || 'https://via.placeholder.com/300x220.png?text=No+Image' }} style={styles.productImage} />
-                  <Text numberOfLines={2} style={styles.productName}>{product.ten_san_pham}</Text>
-                  <Text style={styles.productDetail}>{product.ten_danh_muc || product.ten_thuong_hieu || 'Sản phẩm'}</Text>
-                  <Text style={styles.price}>{formatCurrency(product.gia_ban)}</Text>
-                </Pressable>
-              </Link>
-            ))}
-          </View>
+        {loading ? <LoadingState message="Đang chọn sản phẩm cho bạn..." /> : error ? <EmptyState icon="wifi-off" title="Chưa tải được sản phẩm" message="Kiểm tra kết nối và thử lại nhé." action="Thử lại" onAction={loadHome} /> : !products.length ? <EmptyState icon="inventory-2" title="Sản phẩm đang được cập nhật" /> : (
+          <View style={styles.productRow}>{products.map(product => <View key={product.ma_san_pham} style={styles.productCell}><ProductCard product={product} /></View>)}</View>
         )}
+        <Link href="/products" asChild><Pressable style={styles.bottomBanner}><View style={{ flex: 1 }}><Text style={styles.bottomTitle}>Tìm món đồ hợp với nhà bạn</Text><Text style={styles.bottomText}>Khám phá tất cả sản phẩm</Text></View><MaterialIcons name="arrow-circle-right" size={30} color={shop.primary} /></Pressable></Link>
       </ScrollView>
     </SafeAreaView>
   );
@@ -118,34 +112,38 @@ function SectionHeader({ title, action, href }: { title: string; action: string;
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#F8FAFC' },
-  content: { paddingHorizontal: 20, paddingBottom: 32 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 10, paddingBottom: 22 },
-  eyebrow: { color: '#7A8798', fontSize: 11, fontWeight: '700', letterSpacing: 1.1 },
-  heading: { color: '#152238', fontSize: 25, fontWeight: '800', marginTop: 5 },
-  iconButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center', shadowColor: '#152238', shadowOpacity: 0.08, shadowRadius: 10, elevation: 2 },
-  badge: { position: 'absolute', right: -1, top: -2, minWidth: 18, height: 18, borderRadius: 9, backgroundColor: '#E76F51', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
-  badgeText: { color: '#FFF', fontSize: 10, fontWeight: '800' },
-  hero: { backgroundColor: '#152238', minHeight: 188, borderRadius: 20, padding: 22, overflow: 'hidden', flexDirection: 'row' },
-  heroCopy: { width: '76%', zIndex: 1 },
-  heroKicker: { color: '#A8DADC', fontSize: 10, fontWeight: '800', letterSpacing: 1.4 },
-  heroTitle: { color: '#FFF', fontSize: 26, lineHeight: 30, fontWeight: '800', marginTop: 8 },
-  heroText: { color: '#C9D2DF', fontSize: 13, lineHeight: 19, marginTop: 8 },
-  heroButton: { alignSelf: 'flex-start', flexDirection: 'row', gap: 6, alignItems: 'center', backgroundColor: '#E76F51', paddingHorizontal: 13, paddingVertical: 10, borderRadius: 8, marginTop: 15 },
-  heroButtonText: { color: '#FFF', fontSize: 12, fontWeight: '800' },
-  heroIcon: { position: 'absolute', right: -7, bottom: 18, transform: [{ rotate: '-15deg' }] },
-  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 28, marginBottom: 14 },
-  sectionTitle: { color: '#152238', fontSize: 18, fontWeight: '800' },
-  sectionAction: { color: '#E76F51', fontSize: 13, fontWeight: '700' },
-  categoryRow: { gap: 14, paddingRight: 20 },
-  category: { alignItems: 'center', width: 76 },
-  categoryIcon: { width: 62, height: 62, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
-  categoryLabel: { color: '#536174', fontSize: 11, fontWeight: '600', textAlign: 'center', marginTop: 8 },
-  loading: { height: 160, alignItems: 'center', justifyContent: 'center' },
-  productRow: { flexDirection: 'row', gap: 14 },
-  productCard: { flex: 1, backgroundColor: '#FFF', borderRadius: 14, padding: 10, borderWidth: 1, borderColor: '#eef2f7' },
-  productImage: { height: 126, borderRadius: 12, backgroundColor: '#eef2f7', marginBottom: 11 },
-  productName: { color: '#152238', fontSize: 13, fontWeight: '800', minHeight: 36 },
-  productDetail: { color: '#8490A0', fontSize: 11, marginTop: 4 },
-  price: { color: '#E76F51', fontSize: 15, fontWeight: '800', marginTop: 9 },
+  safeArea: { flex: 1, backgroundColor: shop.background },
+  content: { paddingHorizontal: 20, paddingBottom: 28, width: '100%', maxWidth: 760, alignSelf: 'center' },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingTop: 18, paddingBottom: 22 },
+  eyebrow: { color: shop.ink, fontSize: 18, fontWeight: '900', letterSpacing: 1.4 },
+  heading: { color: shop.muted, fontSize: 11, marginTop: 6 },
+  iconButton: { width: 46, height: 46, borderRadius: 17, backgroundColor: '#fff', borderWidth: 1, borderColor: shop.border, alignItems: 'center', justifyContent: 'center' },
+  badge: { position: 'absolute', right: -3, top: -3, minWidth: 20, height: 20, borderRadius: 15, backgroundColor: shop.primary, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4, borderWidth: 2, borderColor: shop.background },
+  badgeText: { color: '#fff', fontSize: 9, fontWeight: '800' },
+  searchBar: { backgroundColor: '#fff', borderRadius: 18, borderWidth: 1, borderColor: shop.border, minHeight: 54, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 15, marginBottom: 20 },
+  searchText: { color: shop.muted, fontSize: 13, flex: 1 },
+  searchArrow: { backgroundColor: shop.soft, width: 32, height: 32, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
+  hero: { backgroundColor: shop.ink, minHeight: 255, borderRadius: 28, padding: 24, overflow: 'hidden' },
+  heroCircle: { position: 'absolute', right: -90, bottom: -65, width: 260, height: 260, borderRadius: 130, backgroundColor: '#2C5140' },
+  heroCopy: { width: '84%', zIndex: 1 },
+  heroKicker: { color: shop.accent, fontSize: 9, fontWeight: '800', letterSpacing: 1.4 },
+  heroTitle: { color: '#fff', fontSize: 29, lineHeight: 36, fontWeight: '800', letterSpacing: -0.8, marginTop: 14 },
+  heroText: { color: '#D2DFD1', fontSize: 12, lineHeight: 19, marginTop: 10, maxWidth: 220 },
+  heroButton: { alignSelf: 'flex-start', flexDirection: 'row', gap: 10, alignItems: 'center', backgroundColor: shop.accent, paddingHorizontal: 16, minHeight: 43, borderRadius: 22, marginTop: 20 },
+  heroButtonText: { color: shop.ink, fontSize: 12, fontWeight: '800' },
+  heroIcon: { position: 'absolute', right: -18, bottom: 24, transform: [{ rotate: '-12deg' }], opacity: 0.35 },
+  promise: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, marginTop: 16 },
+  promiseText: { color: shop.muted, fontSize: 10, flexShrink: 1 },
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 28, marginBottom: 16 },
+  sectionTitle: { color: shop.ink, fontSize: 19, fontWeight: '800', letterSpacing: -0.5 },
+  sectionAction: { color: shop.primary, fontSize: 11, fontWeight: '700', paddingVertical: 8 },
+  categoryRow: { gap: 16, paddingBottom: 2 },
+  category: { alignItems: 'center', width: 72 },
+  categoryIcon: { width: 66, height: 66, borderRadius: 23, alignItems: 'center', justifyContent: 'center' },
+  categoryLabel: { color: shop.ink, fontSize: 11, fontWeight: '600', textAlign: 'center', marginTop: 10 },
+  productRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+  productCell: { width: '48%', flexGrow: 1, maxWidth: '49%' },
+  bottomBanner: { backgroundColor: shop.soft, padding: 20, borderRadius: 22, flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 24 },
+  bottomTitle: { color: shop.ink, fontSize: 14, fontWeight: '700' },
+  bottomText: { color: shop.muted, fontSize: 12, marginTop: 5 },
 });

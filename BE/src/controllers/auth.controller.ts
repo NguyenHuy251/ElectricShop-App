@@ -95,6 +95,9 @@ export async function login(req: Request, res: Response) {
     return sendSuccess(res, 'Đăng nhập thành công', { token, user: safeUser });
   } catch (error) {
     console.error('Login error:', error);
+    if ((error as { code?: string }).code === 'ER_ACCESS_DENIED_ERROR') {
+      return sendError(res, 503, 'Backend chưa kết nối được MySQL. Kiểm tra DB_USER và DB_PASSWORD trong file .env');
+    }
     return sendError(res, 500, 'Lỗi khi đăng nhập', [(error as Error).message]);
   }
 }

@@ -1,8 +1,7 @@
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Alert, Pressable, StyleSheet, Text } from 'react-native';
+import { AuthField, AuthShell } from '@/components/auth-ui';
 import { authService } from '../../services/auth.service';
 import { getApiMessage } from '../../utils/format';
 
@@ -30,31 +29,24 @@ export default function LoginScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safe}>
-      <View style={styles.container}>
-        <View style={styles.logo}><MaterialIcons name="bolt" size={34} color="#fff" /></View>
-        <Text style={styles.title}>Đăng nhập</Text>
-        <Text style={styles.subtitle}>Tiếp tục mua sắm đồ điện gia dụng</Text>
-        <TextInput placeholder="Tên đăng nhập" placeholderTextColor="#94a3b8" value={ten_dang_nhap} onChangeText={setTenDangNhap} autoCapitalize="none" style={styles.input} />
-        <TextInput placeholder="Mật khẩu" placeholderTextColor="#94a3b8" secureTextEntry value={mat_khau} onChangeText={setMatKhau} style={styles.input} />
+    <AuthShell>
+        <Text style={styles.title}>Chào bạn trở lại!</Text>
+        <Text style={styles.subtitle}>Đăng nhập để tiếp tục chọn đồ cho tổ ấm.</Text>
+        <AuthField placeholder="Tên đăng nhập" value={ten_dang_nhap} onChangeText={setTenDangNhap} autoCapitalize="none" />
+        <AuthField placeholder="Mật khẩu" secureTextEntry value={mat_khau} onChangeText={setMatKhau} />
         <Pressable style={[styles.button, loading && styles.disabled]} onPress={handleLogin} disabled={loading}>
           <Text style={styles.buttonText}>{loading ? 'Đang đăng nhập...' : 'Đăng nhập'}</Text>
         </Pressable>
         <Text style={styles.linkText} onPress={() => router.push('/(auth)/register' as any)}>Chưa có tài khoản? Đăng ký</Text>
-      </View>
-    </SafeAreaView>
+    </AuthShell>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#f8fafc' },
-  container: { flex: 1, justifyContent: 'center', padding: 24 },
-  logo: { width: 64, height: 64, borderRadius: 18, backgroundColor: '#E76F51', alignItems: 'center', justifyContent: 'center', marginBottom: 22 },
-  title: { color: '#152238', fontSize: 30, fontWeight: '800' },
-  subtitle: { color: '#64748b', marginTop: 6, marginBottom: 24 },
-  input: { height: 50, backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 14, marginBottom: 12, borderWidth: 1, borderColor: '#e2e8f0', color: '#152238' },
-  button: { height: 50, borderRadius: 11, backgroundColor: '#E76F51', alignItems: 'center', justifyContent: 'center', marginTop: 4 },
+  title: { color: '#183C35', fontSize: 30, fontWeight: '800' },
+  subtitle: { color: '#6D7D76', marginTop: 6, marginBottom: 24 },
+  button: { height: 54, borderRadius: 16, backgroundColor: '#176B52', alignItems: 'center', justifyContent: 'center', marginTop: 4 },
   disabled: { opacity: 0.65 },
   buttonText: { color: '#fff', fontWeight: '800', fontSize: 15 },
-  linkText: { marginTop: 18, textAlign: 'center', color: '#E76F51', fontWeight: '700' },
+  linkText: { paddingVertical: 16, marginTop: 6, textAlign: 'center', color: '#176B52', fontWeight: '700' },
 });

@@ -5,10 +5,10 @@ import { authorize } from '../middleware/role.middleware.js';
 
 const router = Router();
 
-router.get('/', authenticate, authorize('KhachHang'), getGioHang);
-router.post('/', authenticate, authorize('KhachHang'), addToCart);
-router.put('/:ma_san_pham', authenticate, authorize('KhachHang'), updateCartItem);
-router.delete('/:ma_san_pham', authenticate, authorize('KhachHang'), deleteCartItem);
-router.delete('/', authenticate, authorize('KhachHang'), clearCart);
+router.get('/', authenticate, authorize('Admin', 'NhanVien', 'KhachHang'), getGioHang);
+router.post('/', authenticate, authorize('Admin', 'NhanVien', 'KhachHang'), addToCart);
+router.put('/:ma_san_pham', authenticate, authorize('Admin', 'NhanVien', 'KhachHang'), updateCartItem);
+router.delete('/:ma_san_pham', authenticate, authorize('Admin', 'NhanVien', 'KhachHang'), deleteCartItem);
+router.delete('/', authenticate, authorize('Admin', 'NhanVien', 'KhachHang'), clearCart);
 
 export default router;

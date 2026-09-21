@@ -261,11 +261,11 @@ CREATE TABLE lien_he (
 INSERT INTO tai_khoan
 (ten_dang_nhap, mat_khau, ho_ten, email, so_dien_thoai, dia_chi, vai_tro)
 VALUES
-('admin', '123456', 'Quan tri vien', 'admin@gmail.com', '0900000001', 'Hung Yen', 'Admin'),
-('nhanvien01', '123456', 'Nguyen Van An', 'nhanvien@gmail.com', '0900000002', 'Hung Yen', 'NhanVien'),
-('huy2005', '123456', 'Nguyen Duc Huy', 'huy@gmail.com', '0900000003', 'Hung Yen', 'KhachHang'),
-('ngoc2004', '123456', 'Tran Thi Ngoc', 'ngoc@gmail.com', '0900000004', 'Ha Noi', 'KhachHang'),
-('nam2003', '123456', 'Le Van Nam', 'nam@gmail.com', '0900000005', 'Hai Phong', 'KhachHang');
+('admin', '$2a$10$QKq1RjYeIXkPj2RKW8rsz.l.Kam2J4Igp7C.wMagYyTEklNXRHNjO', 'Quan tri vien', 'admin@gmail.com', '0900000001', 'Hung Yen', 'Admin'),
+('nhanvien01', '$2a$10$QKq1RjYeIXkPj2RKW8rsz.l.Kam2J4Igp7C.wMagYyTEklNXRHNjO', 'Nguyen Van An', 'nhanvien@gmail.com', '0900000002', 'Hung Yen', 'NhanVien'),
+('huy2005', '$2a$10$QKq1RjYeIXkPj2RKW8rsz.l.Kam2J4Igp7C.wMagYyTEklNXRHNjO', 'Nguyen Duc Huy', 'huy@gmail.com', '0900000003', 'Hung Yen', 'KhachHang'),
+('ngoc2004', '$2a$10$QKq1RjYeIXkPj2RKW8rsz.l.Kam2J4Igp7C.wMagYyTEklNXRHNjO', 'Tran Thi Ngoc', 'ngoc@gmail.com', '0900000004', 'Ha Noi', 'KhachHang'),
+('nam2003', '$2a$10$QKq1RjYeIXkPj2RKW8rsz.l.Kam2J4Igp7C.wMagYyTEklNXRHNjO', 'Le Van Nam', 'nam@gmail.com', '0900000005', 'Hai Phong', 'KhachHang');
 
 -- =========================================================
 -- DU LIEU MAU - NHAN VIEN

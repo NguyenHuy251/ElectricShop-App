@@ -9,7 +9,7 @@ export function formatDate(value?: string | Date | null) {
 }
 
 export function getApiMessage(error: any, fallback: string) {
-  return error?.response?.data?.message || fallback;
+  return error?.response?.data?.message || error?.response?.data?.errors?.[0] || fallback;
 }
 
 export function getInitials(name?: string | null) {

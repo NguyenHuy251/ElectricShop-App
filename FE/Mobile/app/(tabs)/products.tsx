@@ -1,13 +1,18 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { Link } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, FlatList, Image, Pressable, RefreshControl, StyleSheet, Text, TextInput, View } from 'react-native';
+import { FlatList, Pressable, RefreshControl, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { productService } from '../../services/product.service';
 import type { Product } from '../../types';
-import { formatCurrency } from '../../utils/format';
+import { EmptyState, LoadingState, ProductCard, ScreenHeading } from '@/components/shop-ui';
+import { shop } from '@/constants/shop-theme';
 
 export default function ProductsScreen() {
+  const { category } = useLocalSearchParams<{ category?: string }>();
+  const router = useRouter();
+  const selectedCategory = category || 'Tất cả';
+  const setSelectedCategory = (value: string) => router.setParams({ category: value });
   const [products, setProducts] = useState<Product[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
@@ -38,65 +43,59 @@ export default function ProductsScreen() {
     ...Array.from(new Set(products.map((item) => item.ten_danh_muc).filter((value): value is string => Boolean(value)))),
   ], [products]);
 
+  const visibleProducts = products.filter(item => selectedCategory === 'Tất cả' || item.ten_danh_muc === selectedCategory);
+
   const refresh = () => {
     setRefreshing(true);
     loadProducts(search);
   };
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.container}>
-        <Text style={styles.kicker}>CỬA HÀNG</Text>
-        <Text style={styles.title}>Sản phẩm</Text>
+        <ScreenHeading eyebrow="KHÁM PHÁ" title="Chọn cho tổ ấm" subtitle="Những tiện ích nhỏ, cho cuộc sống dễ dàng hơn." icon="grid-view" />
         <View style={styles.searchBox}>
-          <MaterialIcons name="search" size={21} color="#64748b" />
+          <MaterialIcons name="search" size={21} color="#6D7D76" />
           <TextInput
             placeholder="Tìm sản phẩm, mã hoặc danh mục"
-            placeholderTextColor="#94a3b8"
+            placeholderTextColor="#84938B"
             value={search}
             onChangeText={setSearch}
             style={styles.search}
           />
-          {search ? <Pressable onPress={() => setSearch('')}><MaterialIcons name="close" size={20} color="#64748b" /></Pressable> : null}
+          {search ? <Pressable onPress={() => setSearch('')}><MaterialIcons name="close" size={20} color="#6D7D76" /></Pressable> : null}
         </View>
 
         <FlatList
           horizontal
+          style={{ flexGrow: 0, flexShrink: 0 }}
           data={categories}
           keyExtractor={(item) => item}
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.categories}
-          renderItem={({ item, index }) => (
-            <View style={[styles.chip, index === 0 && styles.chipActive]}>
-              <Text style={[styles.chipText, index === 0 && styles.chipTextActive]}>{item}</Text>
-            </View>
+          renderItem={({ item }) => (
+            <Pressable onPress={() => setSelectedCategory(item)} accessibilityRole="button" accessibilityState={{ selected: selectedCategory === item }} style={[styles.chip, selectedCategory === item && styles.chipActive]}>
+              <Text style={[styles.chipText, selectedCategory === item && styles.chipTextActive]}>{item}</Text>
+            </Pressable>
           )}
         />
 
         {loading ? (
-          <View style={styles.center}><ActivityIndicator color="#E76F51" /><Text style={styles.muted}>Đang tải sản phẩm...</Text></View>
+          <LoadingState message="Đang tải sản phẩm..." />
         ) : error ? (
-          <View style={styles.center}><Text style={styles.error}>{error}</Text><Pressable style={styles.retry} onPress={() => loadProducts(search, true)}><Text style={styles.retryText}>Thử lại</Text></Pressable></View>
+          <EmptyState icon="wifi-off" title="Kết nối bị gián đoạn" message={error} action="Thử lại" onAction={() => loadProducts(search, true)} />
         ) : (
           <FlatList
-            data={products}
+            data={visibleProducts}
             keyExtractor={(item) => String(item.ma_san_pham)}
             numColumns={2}
             columnWrapperStyle={styles.row}
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
-            contentContainerStyle={products.length ? styles.list : styles.emptyList}
-            ListEmptyComponent={<Text style={styles.muted}>Không có sản phẩm phù hợp</Text>}
-            renderItem={({ item }) => (
-              <Link href={{ pathname: '/product/[id]', params: { id: String(item.ma_san_pham) } }} asChild>
-                <Pressable style={styles.card}>
-                  <Image source={{ uri: item.hinh_anh || 'https://via.placeholder.com/400x300.png?text=No+Image' }} style={styles.image} />
-                  <Text style={styles.category}>{item.ten_danh_muc || 'Danh mục'}</Text>
-                  <Text numberOfLines={2} style={styles.name}>{item.ten_san_pham}</Text>
-                  <Text style={styles.stock}>{Number(item.so_luong) > 0 ? `Còn ${item.so_luong}` : 'Hết hàng'}</Text>
-                  <Text style={styles.price}>{formatCurrency(item.gia_ban)}</Text>
-                </Pressable>
-              </Link>
-            )}
+            contentContainerStyle={visibleProducts.length ? styles.list : styles.emptyList}
+            ListHeaderComponent={visibleProducts.length ? <Text style={styles.resultCount}>{visibleProducts.length} sản phẩm dành cho bạn</Text> : null}
+            showsVerticalScrollIndicator={false}
+            ListEmptyComponent={<EmptyState icon="search-off" title="Chưa tìm thấy sản phẩm" message="Thử từ khóa khác hoặc xem tất cả danh mục." action="Xem tất cả" onAction={() => { setSearch(''); setSelectedCategory('Tất cả'); }} />}
+            renderItem={({ item }) => <View style={styles.productCell}><ProductCard product={item} /></View>}
           />
         )}
       </View>
@@ -105,29 +104,18 @@ export default function ProductsScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#f8fafc' },
-  container: { flex: 1, paddingHorizontal: 16, paddingTop: 10 },
-  kicker: { color: '#E76F51', fontSize: 11, fontWeight: '800', letterSpacing: 1.2 },
-  title: { color: '#152238', fontSize: 30, fontWeight: '800', marginTop: 4, marginBottom: 14 },
-  searchBox: { height: 48, flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#e2e8f0', paddingHorizontal: 12 },
-  search: { flex: 1, color: '#152238', fontSize: 14 },
+  resultCount: { color: shop.muted, fontSize: 12, marginBottom: 16 },
+  productCell: { flex: 1, maxWidth: '49%', marginBottom: 14 },
+  safe: { flex: 1, backgroundColor: '#F6F7F2' },
+  container: { flex: 1, paddingHorizontal: 20, paddingTop: 12, width: '100%', maxWidth: 760, alignSelf: 'center' },
+  searchBox: { height: 54, flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#fff', borderRadius: 18, borderWidth: 1, borderColor: '#E3E9E1', paddingHorizontal: 12 },
+  search: { flex: 1, color: '#183C35', fontSize: 14 },
   categories: { gap: 8, paddingVertical: 14 },
-  chip: { height: 36, justifyContent: 'center', paddingHorizontal: 14, borderRadius: 18, backgroundColor: '#fff', borderWidth: 1, borderColor: '#e2e8f0' },
-  chipActive: { backgroundColor: '#152238', borderColor: '#152238' },
-  chipText: { color: '#64748b', fontSize: 12, fontWeight: '700' },
+  chip: { height: 36, justifyContent: 'center', paddingHorizontal: 14, borderRadius: 18, backgroundColor: '#fff', borderWidth: 1, borderColor: '#E3E9E1' },
+  chipActive: { backgroundColor: '#183C35', borderColor: '#183C35' },
+  chipText: { color: '#6D7D76', fontSize: 12, fontWeight: '700' },
   chipTextActive: { color: '#fff' },
   list: { paddingBottom: 24 },
   emptyList: { flexGrow: 1, alignItems: 'center', justifyContent: 'center' },
   row: { gap: 12 },
-  card: { flex: 1, backgroundColor: '#fff', borderRadius: 14, padding: 10, marginBottom: 12, borderWidth: 1, borderColor: '#eef2f7' },
-  image: { width: '100%', aspectRatio: 1.1, borderRadius: 10, marginBottom: 10, backgroundColor: '#eef2f7' },
-  category: { color: '#E76F51', fontSize: 10, fontWeight: '800', textTransform: 'uppercase' },
-  name: { color: '#152238', fontSize: 14, fontWeight: '800', minHeight: 38, marginTop: 4 },
-  stock: { color: '#64748b', fontSize: 12, marginTop: 5 },
-  price: { color: '#E76F51', fontSize: 16, fontWeight: '800', marginTop: 8 },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10 },
-  muted: { color: '#64748b', fontSize: 14 },
-  error: { color: '#dc2626', fontSize: 14 },
-  retry: { backgroundColor: '#152238', borderRadius: 8, paddingHorizontal: 14, paddingVertical: 10 },
-  retryText: { color: '#fff', fontWeight: '800' },
 });

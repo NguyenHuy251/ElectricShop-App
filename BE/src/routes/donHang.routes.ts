@@ -5,7 +5,7 @@ import { authorize } from '../middleware/role.middleware.js';
 
 const router = Router();
 
-router.post('/', authenticate, authorize('KhachHang'), createDonHang);
+router.post('/', authenticate, authorize('Admin', 'NhanVien', 'KhachHang'), createDonHang);
 router.get('/', authenticate, authorize('Admin', 'NhanVien', 'KhachHang'), getDonHang);
 router.get('/:id', authenticate, authorize('Admin', 'NhanVien', 'KhachHang'), getDonHangById);
 router.put('/:id/trang-thai', authenticate, authorize('Admin', 'NhanVien'), updateTrangThaiDonHang);
