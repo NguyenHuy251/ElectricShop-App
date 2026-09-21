@@ -124,3 +124,42 @@ export async function me(req: AuthRequest, res: Response) {
     return sendError(res, 500, 'Lỗi khi lấy thông tin người dùng', [(error as Error).message]);
   }
 }
+
+export async function updateMe(req: AuthRequest, res: Response) {
+  try {
+    if (!req.user) {
+      return sendError(res, 401, 'Bạn chưa đăng nhập');
+    }
+
+    const { ho_ten, email, so_dien_thoai, dia_chi } = req.body;
+    if (!ho_ten?.trim() || !email?.trim()) {
+      return sendError(res, 400, 'Họ tên và email là bắt buộc');
+    }
+
+    const [existingRows] = await pool.query(
+      'SELECT ma_tai_khoan FROM tai_khoan WHERE email = ? AND ma_tai_khoan <> ?',
+      [email.trim(), req.user.ma_tai_khoan],
+    );
+    if ((existingRows as any[]).length > 0) {
+      return sendError(res, 409, 'Email đã được sử dụng bởi tài khoản khác');
+    }
+
+    await pool.execute(
+      `UPDATE tai_khoan
+       SET ho_ten = ?, email = ?, so_dien_thoai = ?, dia_chi = ?
+       WHERE ma_tai_khoan = ?`,
+      [ho_ten.trim(), email.trim(), so_dien_thoai?.trim() || null, dia_chi?.trim() || null, req.user.ma_tai_khoan],
+    );
+
+    const [rows] = await pool.query(
+      `SELECT ma_tai_khoan, ten_dang_nhap, ho_ten, email, so_dien_thoai, dia_chi, vai_tro, trang_thai, ngay_tao
+       FROM tai_khoan WHERE ma_tai_khoan = ?`,
+      [req.user.ma_tai_khoan],
+    );
+
+    return sendSuccess(res, 'Cập nhật thông tin tài khoản thành công', (rows as any[])[0]);
+  } catch (error) {
+    console.error('Update profile error:', error);
+    return sendError(res, 500, 'Lỗi khi cập nhật thông tin tài khoản', [(error as Error).message]);
+  }
+}

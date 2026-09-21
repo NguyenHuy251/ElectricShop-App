@@ -23,6 +23,12 @@ export const authService = {
     return response.data;
   },
 
+  updateMe: async (payload: { ho_ten: string; email: string; so_dien_thoai?: string; dia_chi?: string }) => {
+    const response = await api.put('/auth/me', payload);
+    await AsyncStorage.setItem('user', JSON.stringify(response.data.data));
+    return response.data;
+  },
+
   logout: async () => {
     await AsyncStorage.removeItem('token');
     await AsyncStorage.removeItem('user');

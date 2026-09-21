@@ -13,4 +13,8 @@ export const orderService = {
     const response = await api.get(`/don-hang/${id}`);
     return response.data;
   },
+  cancelOrder: async (id: number) => {
+    const response = await api.put(`/don-hang/${id}/huy`);
+    return response.data;
+  },
 };

@@ -40,5 +40,7 @@ export interface Order {
   tong_tien: number;
   phuong_thuc_thanh_toan: 'TienMat' | 'ChuyenKhoan' | 'ThanhToanKhiNhanHang';
   trang_thai: 'ChoXacNhan' | 'DaXacNhan' | 'DangGiao' | 'DaGiao' | 'DaHuy';
+  ghi_chu?: string | null;
+  ngay_dat?: string;
   items?: any[];
 }
