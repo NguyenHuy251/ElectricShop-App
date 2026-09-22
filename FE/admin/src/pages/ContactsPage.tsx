@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api/api';
+import AdminSidebar from '../components/AdminSidebar';
 
 export default function ContactsPage() {
   const [contacts, setContacts] = useState<any[]>([]);
@@ -14,7 +15,7 @@ export default function ContactsPage() {
 
   return (
     <div className="layout">
-      <aside className="sidebar"><h3>AppElectricShop</h3><a href="/dashboard">Dashboard</a></aside>
+      <AdminSidebar />
       <main className="main">
         <div className="topbar"><strong>Liên hệ</strong></div>
         <div className="page">

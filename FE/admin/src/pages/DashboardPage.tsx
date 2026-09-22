@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api/api';
+import AdminSidebar from '../components/AdminSidebar';
 
 export default function DashboardPage() {
   const [stats, setStats] = useState<any>(null);
@@ -20,18 +21,7 @@ export default function DashboardPage() {
 
   return (
     <div className="layout">
-      <aside className="sidebar">
-        <h3>AppElectricShop</h3>
-        <a href="/dashboard">Dashboard</a>
-        <a href="/products">Sản phẩm</a>
-        <a href="/categories">Danh mục</a>
-        <a href="/orders">Đơn hàng</a>
-        <a href="/customers">Khách hàng</a>
-        <a href="/employees">Nhân viên</a>
-        <a href="/reviews">Đánh giá</a>
-        <a href="/contacts">Liên hệ</a>
-        <a href="/login" onClick={() => localStorage.removeItem('admin_token')}>Đăng xuất</a>
-      </aside>
+      <AdminSidebar />
       <main className="main">
         <div className="topbar">
           <strong>Dashboard</strong>

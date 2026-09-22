@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api/api';
+import AdminSidebar from '../components/AdminSidebar';
 
 export default function EmployeesPage() {
   const [employees, setEmployees] = useState<any[]>([]);
@@ -14,13 +15,7 @@ export default function EmployeesPage() {
 
   return (
     <div className="layout">
-      <aside className="sidebar">
-        <h3>AppElectricShop</h3>
-        <a href="/dashboard">Dashboard</a>
-        <a href="/products">Sản phẩm</a>
-        <a href="/categories">Danh mục</a>
-        <a href="/orders">Đơn hàng</a>
-      </aside>
+      <AdminSidebar />
       <main className="main">
         <div className="topbar"><strong>Quản lý nhân viên</strong></div>
         <div className="page">

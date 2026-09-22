@@ -9,6 +9,7 @@ import CustomersPage from './pages/CustomersPage';
 import EmployeesPage from './pages/EmployeesPage';
 import ReviewsPage from './pages/ReviewsPage';
 import ContactsPage from './pages/ContactsPage';
+import BrandsPage from './pages/BrandsPage';
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
   const token = localStorage.getItem('admin_token');
@@ -24,6 +25,7 @@ export default function App() {
       <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
       <Route path="/products" element={<ProtectedRoute><ProductsPage /></ProtectedRoute>} />
       <Route path="/categories" element={<ProtectedRoute><CategoriesPage /></ProtectedRoute>} />
+      <Route path="/brands" element={<ProtectedRoute><BrandsPage /></ProtectedRoute>} />
       <Route path="/orders" element={<ProtectedRoute><OrdersPage /></ProtectedRoute>} />
       <Route path="/customers" element={<ProtectedRoute><CustomersPage /></ProtectedRoute>} />
       <Route path="/employees" element={<ProtectedRoute><EmployeesPage /></ProtectedRoute>} />

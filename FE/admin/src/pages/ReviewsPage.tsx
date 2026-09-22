@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api/api';
+import AdminSidebar from '../components/AdminSidebar';
 
 export default function ReviewsPage() {
   const [reviews, setReviews] = useState<any[]>([]);
@@ -14,7 +15,7 @@ export default function ReviewsPage() {
 
   return (
     <div className="layout">
-      <aside className="sidebar"><h3>AppElectricShop</h3><a href="/dashboard">Dashboard</a></aside>
+      <AdminSidebar />
       <main className="main">
         <div className="topbar"><strong>Đánh giá</strong></div>
         <div className="page">
