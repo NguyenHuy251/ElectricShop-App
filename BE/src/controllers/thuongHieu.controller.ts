@@ -1,3 +1,4 @@
+import { duplicateField } from '../utils/adminErrors.js';
 import { Request, Response } from 'express';
 import { pool } from '../config/database.js';
 import { sendError, sendSuccess } from '../utils/response.js';
@@ -7,6 +8,7 @@ export async function getAllThuongHieu(req: Request, res: Response) {
     const [rows] = await pool.query('SELECT * FROM thuong_hieu ORDER BY ma_thuong_hieu DESC');
     return sendSuccess(res, 'Danh sách thương hiệu', rows);
   } catch (error) {
+    if (duplicateField(error, res, 'ten_thuong_hieu', 'Tên thương hiệu đã tồn tại')) return;
     return sendError(res, 500, 'Lỗi khi lấy thương hiệu', [(error as Error).message]);
   }
 }
@@ -19,6 +21,7 @@ export async function getThuongHieuById(req: Request, res: Response) {
     if (!result.length) return sendError(res, 404, 'Không tìm thấy thương hiệu');
     return sendSuccess(res, 'Thương hiệu được tìm thấy', result[0]);
   } catch (error) {
+    if (duplicateField(error, res, 'ten_thuong_hieu', 'Tên thương hiệu đã tồn tại')) return;
     return sendError(res, 500, 'Lỗi khi lấy thương hiệu', [(error as Error).message]);
   }
 }
@@ -36,6 +39,7 @@ export async function createThuongHieu(req: Request, res: Response) {
     const insertResult = result as { insertId: number };
     return sendSuccess(res, 'Thêm thương hiệu thành công', { ma_thuong_hieu: insertResult.insertId });
   } catch (error) {
+    if (duplicateField(error, res, 'ten_thuong_hieu', 'Tên thương hiệu đã tồn tại')) return;
     return sendError(res, 500, 'Lỗi khi thêm thương hiệu', [(error as Error).message]);
   }
 }
@@ -56,6 +60,7 @@ export async function updateThuongHieu(req: Request, res: Response) {
 
     return sendSuccess(res, 'Cập nhật thương hiệu thành công', { ma_thuong_hieu: Number(id) });
   } catch (error) {
+    if (duplicateField(error, res, 'ten_thuong_hieu', 'Tên thương hiệu đã tồn tại')) return;
     return sendError(res, 500, 'Lỗi khi cập nhật thương hiệu', [(error as Error).message]);
   }
 }
@@ -70,6 +75,8 @@ export async function deleteThuongHieu(req: Request, res: Response) {
     await pool.query('DELETE FROM thuong_hieu WHERE ma_thuong_hieu = ?', [id]);
     return sendSuccess(res, 'Xóa thương hiệu thành công', { ma_thuong_hieu: Number(id) });
   } catch (error) {
+    if (duplicateField(error, res, 'ten_thuong_hieu', 'Tên thương hiệu đã tồn tại')) return;
+    if ((error as { code?: string }).code === 'ER_ROW_IS_REFERENCED_2') return sendError(res, 409, 'Thương hiệu đang được sản phẩm sử dụng, không thể xóa.');
     return sendError(res, 500, 'Lỗi khi xóa thương hiệu', [(error as Error).message]);
   }
 }

@@ -1,32 +1,12 @@
-import { useEffect, useState } from 'react';
-import { api } from '../api/api';
-import AdminSidebar from '../components/AdminSidebar';
-
+import { Descriptions } from 'antd';
+import ResourcePage from '../components/ResourcePage';
+import { contactApi } from '../api/contact.api';
+import { dateTime, labels, options, Status } from '../utils/format';
+import type { Contact } from '../types';
+const contactManagementApi = { list: contactApi.list, get: contactApi.get, update: contactApi.update, remove: contactApi.remove };
 export default function ContactsPage() {
-  const [contacts, setContacts] = useState<any[]>([]);
-
-  useEffect(() => {
-    const load = async () => {
-      const response = await api.get('/lien-he');
-      setContacts(response.data.data || []);
-    };
-    load();
-  }, []);
-
-  return (
-    <div className="layout">
-      <AdminSidebar />
-      <main className="main">
-        <div className="topbar"><strong>Liên hệ</strong></div>
-        <div className="page">
-          <div className="card">
-            <table className="table">
-              <thead><tr><th>Họ tên</th><th>Email</th><th>Tiêu đề</th><th>Trạng thái</th></tr></thead>
-              <tbody>{contacts.map((contact) => <tr key={contact.ma_lien_he}><td>{contact.ho_ten}</td><td>{contact.email}</td><td>{contact.tieu_de}</td><td>{contact.trang_thai}</td></tr>)}</tbody>
-            </table>
-          </div>
-        </div>
-      </main>
-    </div>
-  );
+  return <ResourcePage<Contact> title="Liên hệ" idKey="ma_lien_he" api={contactManagementApi} searchKeys={['ho_ten', 'email', 'tieu_de']} filter={{ key: 'trang_thai', options: options(['ChuaXuLy', 'DangXuLy', 'DaXuLy']) }}
+    columns={[{ title: 'Họ tên', dataIndex: 'ho_ten' }, { title: 'Email', dataIndex: 'email' }, { title: 'Điện thoại', dataIndex: 'so_dien_thoai' }, { title: 'Tiêu đề', dataIndex: 'tieu_de' }, { title: 'Ngày gửi', dataIndex: 'ngay_gui', render: dateTime }, { title: 'Trạng thái', dataIndex: 'trang_thai', render: value => <Status value={value} /> }]}
+    fields={[{ name: 'trang_thai', label: 'Trạng thái xử lý', kind: 'select', required: true, options: options(['ChuaXuLy', 'DangXuLy', 'DaXuLy']) }]}
+    details={row => <Descriptions column={1} bordered items={[['Họ tên', row.ho_ten], ['Email', row.email], ['Điện thoại', row.so_dien_thoai], ['Tiêu đề', row.tieu_de], ['Nội dung', row.noi_dung], ['Ngày gửi', dateTime(row.ngay_gui)], ['Trạng thái', labels[row.trang_thai]]].map(([label, children]) => ({ key: label, label, children: <span style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{children || '—'}</span> }))} />} />;
 }

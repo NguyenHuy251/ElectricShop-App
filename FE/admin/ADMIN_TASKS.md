@@ -1,5 +1,7 @@
 # Công việc cần làm cho FE Admin
 
+> Cập nhật 23/09/2026: đã triển khai các chức năng còn thiếu. Build FE/BE, 12 kiểm thử backend và 8 kịch bản Chrome đã đạt với dữ liệu giả lập. Các mục kiểm thử API/MySQL thật ở phần 7 vẫn chưa tích. Xem [ADMIN_IMPLEMENTATION.md](./ADMIN_IMPLEMENTATION.md) để biết API, cấu hình và giới hạn kiểm thử.
+
 ## Phân chia công việc cho nhóm
 
 ### Nửa A - Đã thực hiện trong workspace này
@@ -22,34 +24,34 @@ Phạm vi Nửa A nằm chủ yếu ở:
 - `FE/admin/src/App.tsx`
 - `FE/admin/src/styles.css`
 
-### Nửa B - Giao cho thành viên còn lại
+### Nửa B - Đã triển khai, chờ kiểm thử tích hợp
 
 #### Nền tảng dùng chung
 
-- [ ] Tạo `AdminLayout`, `Sidebar`, `Topbar` dùng chung.
-- [ ] Thay sidebar lặp lại trong từng page bằng layout chung.
-- [ ] Dùng `NavLink` thay cho thẻ `<a>`.
-- [ ] Tạo state xác thực tập trung và gọi `/auth/me`.
-- [ ] Ẩn/hiện menu theo vai trò `Admin` và `NhanVien`.
-- [ ] Xử lý logout, token hết hạn và responsive layout.
+- [x] Tạo `AdminLayout`, `Sidebar`, `Topbar` dùng chung.
+- [x] Thay sidebar lặp lại trong từng page bằng layout chung.
+- [x] Dùng `NavLink` thay cho thẻ `<a>`.
+- [x] Tạo state xác thực tập trung và gọi `/auth/me`.
+- [x] Ẩn/hiện menu theo vai trò `Admin` và `NhanVien`.
+- [x] Xử lý logout, token hết hạn và responsive layout.
 
 #### Nghiệp vụ vận hành
 
-- [ ] Hoàn thiện Dashboard: loading, lỗi, biểu đồ và đơn mới nhất.
-- [ ] Hoàn thiện Đơn hàng: tìm kiếm, lọc, xem chi tiết, cập nhật trạng thái và xóa.
-- [ ] Hoàn thiện Khách hàng/Tài khoản: tìm kiếm, sửa, khóa/mở khóa, xóa.
-- [ ] Hoàn thiện Nhân viên: thêm, sửa, xóa, lọc trạng thái và kiểm soát quyền Admin.
-- [ ] Hoàn thiện Đánh giá: bỏ mã sản phẩm cố định `1`, chọn sản phẩm, lọc và quản trị.
-- [ ] Hoàn thiện Liên hệ: xem chi tiết, lọc, tìm kiếm, đổi trạng thái và xóa.
+- [x] Hoàn thiện Dashboard: loading, lỗi, biểu đồ và đơn mới nhất.
+- [x] Hoàn thiện Đơn hàng: tìm kiếm, lọc, xem chi tiết, cập nhật trạng thái và xóa.
+- [x] Hoàn thiện Khách hàng/Tài khoản: tìm kiếm, sửa, khóa/mở khóa, xóa.
+- [x] Hoàn thiện Nhân viên: thêm, sửa, xóa, lọc trạng thái và kiểm soát quyền Admin.
+- [x] Hoàn thiện Đánh giá: bỏ mã sản phẩm cố định `1`, chọn sản phẩm, lọc và quản trị.
+- [x] Hoàn thiện Liên hệ: xem chi tiết, lọc, tìm kiếm, đổi trạng thái và xóa.
 
 #### Chất lượng và phát hành
 
-- [ ] Tạo các file API và type dùng chung, giảm `any`.
-- [ ] Thay `alert()` bằng `message`/`notification` của Ant Design.
-- [ ] Bổ sung loading, empty state, error state và confirm Modal.
-- [ ] Chuẩn hóa định dạng tiền, ngày và trạng thái.
-- [ ] Kiểm thử quyền Admin/NhanVien, CRUD và responsive.
-- [ ] Chạy `npm run build` và kiểm tra cấu hình `VITE_API_URL` trước khi merge.
+- [x] Tạo các file API và type dùng chung, giảm `any`.
+- [x] Thay `alert()` bằng `message`/`notification` của Ant Design.
+- [x] Bổ sung loading, empty state, error state và confirm Modal.
+- [x] Chuẩn hóa định dạng tiền, ngày và trạng thái.
+- [x] Kiểm thử quyền Admin/NhanVien, CRUD và responsive.
+- [x] Chạy `npm run build` và kiểm tra cấu hình `VITE_API_URL` trước khi merge.
 
 ### Quy tắc phối hợp
 
@@ -74,29 +76,29 @@ API backend hiện chạy mặc định tại `http://localhost:3000/api`.
 
 ### 2.1. Hoàn thiện xác thực và phân quyền
 
-- [ ] Tạo `AuthContext` hoặc cơ chế state tập trung cho user hiện tại.
-- [ ] Gọi `/auth/me` sau khi khôi phục token để xác nhận token còn hợp lệ.
-- [ ] Nếu user là `KhachHang`, không cho truy cập giao diện admin.
-- [ ] Ẩn/hiện menu theo vai trò:
+- [x] Tạo `AuthContext` hoặc cơ chế state tập trung cho user hiện tại.
+- [x] Gọi `/auth/me` sau khi khôi phục token để xác nhận token còn hợp lệ.
+- [x] Nếu user là `KhachHang`, không cho truy cập giao diện admin.
+- [x] Ẩn/hiện menu theo vai trò:
   - `Admin`: tài khoản, nhân viên, khách hàng, toàn bộ chức năng.
   - `NhanVien`: sản phẩm, danh mục, thương hiệu, đơn hàng, liên hệ, đánh giá.
-- [ ] Xử lý trạng thái token hết hạn và chuyển về `/login`.
-- [ ] Xóa cả `admin_token` và `admin_user` khi đăng xuất.
-- [ ] Không lưu mật khẩu trong localStorage.
+- [x] Xử lý trạng thái token hết hạn và chuyển về `/login`.
+- [x] Xóa cả `admin_token` và `admin_user` khi đăng xuất.
+- [x] Không lưu mật khẩu trong localStorage.
 
 ### 2.2. Chuẩn hóa layout quản trị
 
-Hiện mỗi page tự lặp lại sidebar và topbar. Cần tạo layout dùng chung:
+Các page sử dụng layout dùng chung:
 
-- [ ] Tạo `AdminLayout`.
-- [ ] Tạo `Sidebar` dùng chung.
-- [ ] Tạo `Topbar` dùng chung.
-- [ ] Tạo menu bằng `NavLink` thay cho thẻ `<a>` để không reload toàn trang.
-- [ ] Hiển thị tên và vai trò người đang đăng nhập.
-- [ ] Thêm nút đăng xuất dùng chung.
-- [ ] Hiển thị trạng thái loading khi chuyển trang.
-- [ ] Tạo layout responsive cho màn hình tablet và mobile.
-- [ ] Thêm menu thu gọn trên màn hình nhỏ.
+- [x] Tạo `AdminLayout`.
+- [x] Tạo `Sidebar` dùng chung.
+- [x] Tạo `Topbar` dùng chung.
+- [x] Tạo menu bằng `NavLink` thay cho thẻ `<a>` để không reload toàn trang.
+- [x] Hiển thị tên và vai trò người đang đăng nhập.
+- [x] Thêm nút đăng xuất dùng chung.
+- [x] Hiển thị trạng thái loading khi chuyển trang.
+- [x] Tạo layout responsive cho màn hình tablet và mobile.
+- [x] Thêm menu thu gọn trên màn hình nhỏ.
 
 ## 3. Hoàn thiện từng màn hình
 
@@ -104,16 +106,16 @@ Hiện mỗi page tự lặp lại sidebar và topbar. Cần tạo layout dùng 
 
 API: `GET /dashboard`
 
-- [ ] Hiển thị tổng sản phẩm.
-- [ ] Hiển thị tổng khách hàng.
-- [ ] Hiển thị tổng nhân viên.
-- [ ] Hiển thị tổng đơn hàng.
-- [ ] Hiển thị doanh thu.
-- [ ] Hiển thị số đơn theo trạng thái.
-- [ ] Thêm biểu đồ doanh thu theo thời gian nếu backend cung cấp dữ liệu.
-- [ ] Thêm danh sách đơn hàng mới nhất.
-- [ ] Hiển thị trạng thái loading, lỗi và nút thử lại.
-- [ ] Định dạng tiền theo chuẩn Việt Nam.
+- [x] Hiển thị tổng sản phẩm.
+- [x] Hiển thị tổng khách hàng.
+- [x] Hiển thị tổng nhân viên.
+- [x] Hiển thị tổng đơn hàng.
+- [x] Hiển thị doanh thu.
+- [x] Hiển thị số đơn theo trạng thái.
+- [x] Thêm biểu đồ doanh thu theo thời gian nếu backend cung cấp dữ liệu.
+- [x] Thêm danh sách đơn hàng mới nhất.
+- [x] Hiển thị trạng thái loading, lỗi và nút thử lại.
+- [x] Định dạng tiền theo chuẩn Việt Nam.
 
 ### 3.2. Sản phẩm
 
@@ -125,17 +127,17 @@ API:
 - `PUT /san-pham/:id`
 - `DELETE /san-pham/:id`
 
-- [ ] Thêm bộ lọc theo tên, mã sản phẩm, danh mục, thương hiệu.
-- [ ] Thêm phân trang theo `page`, `limit`, `totalPages`.
+- [x] Thêm bộ lọc theo tên, mã sản phẩm, danh mục, thương hiệu.
+- [x] Thêm phân trang theo `page`, `limit`, `totalPages`.
 - [x] Thay ô nhập mã danh mục và mã thương hiệu bằng dropdown dữ liệu thật.
-- [ ] Tạo form thêm sản phẩm bằng Modal hoặc Drawer.
+- [x] Tạo form thêm sản phẩm bằng Modal hoặc Drawer.
 - [x] Tạo form chỉnh sửa sản phẩm.
-- [ ] Nhập đầy đủ thông tin chi tiết: công suất, dung tích, kích thước, màu sắc, xuất xứ, thông số khác.
-- [ ] Thêm trường hình ảnh và preview ảnh.
+- [x] Nhập đầy đủ thông tin chi tiết: công suất, dung tích, kích thước, màu sắc, xuất xứ, thông số khác.
+- [x] Thêm trường hình ảnh và preview ảnh.
 - [x] Thêm xác nhận trước khi xóa.
-- [ ] Không cho xóa sản phẩm nếu backend trả lỗi do ràng buộc đơn hàng.
-- [ ] Hiển thị badge đúng theo trạng thái `DangBan`, `HetHang`, `NgungBan`.
-- [ ] Thêm thông báo thành công/thất bại sau mỗi thao tác.
+- [x] Không cho xóa sản phẩm nếu backend trả lỗi do ràng buộc đơn hàng.
+- [x] Hiển thị badge đúng theo trạng thái `DangBan`, `HetHang`, `NgungBan`.
+- [x] Thêm thông báo thành công/thất bại sau mỗi thao tác.
 
 ### 3.3. Danh mục
 
@@ -146,16 +148,16 @@ API:
 - `PUT /danh-muc/:id`
 - `DELETE /danh-muc/:id`
 
-- [ ] Hiển thị danh sách bằng bảng có tìm kiếm.
+- [x] Hiển thị danh sách bằng bảng có tìm kiếm.
 - [x] Thêm danh mục.
 - [x] Chỉnh sửa danh mục.
 - [x] Xóa danh mục sau khi xác nhận.
 - [x] Bật/tắt trạng thái danh mục.
-- [ ] Xử lý lỗi khi danh mục đang được sản phẩm sử dụng.
+- [x] Xử lý lỗi khi danh mục đang được sản phẩm sử dụng.
 
 ### 3.4. Thương hiệu
 
-Backend đã có API nhưng FE admin chưa có trang riêng.
+FE admin đã có trang thương hiệu riêng và API CRUD.
 
 API:
 
@@ -169,7 +171,7 @@ API:
 - [x] Thêm menu Thương hiệu vào sidebar.
 - [x] Thêm, sửa, xóa thương hiệu.
 - [x] Hiển thị quốc gia và mô tả.
-- [ ] Xử lý lỗi thương hiệu đang được sản phẩm sử dụng.
+- [x] Xử lý lỗi thương hiệu đang được sản phẩm sử dụng.
 
 ### 3.5. Đơn hàng
 
@@ -180,21 +182,21 @@ API:
 - `PUT /don-hang/:id/trang-thai`
 - `DELETE /don-hang/:id`
 
-- [ ] Hiển thị tên tài khoản đặt hàng, người nhận, số điện thoại và địa chỉ.
-- [ ] Hiển thị danh sách sản phẩm trong từng đơn.
-- [ ] Tạo Drawer hoặc Modal xem chi tiết đơn hàng.
-- [ ] Cập nhật trạng thái đơn hàng bằng các giá trị hợp lệ:
+- [x] Hiển thị tên tài khoản đặt hàng, người nhận, số điện thoại và địa chỉ.
+- [x] Hiển thị danh sách sản phẩm trong từng đơn.
+- [x] Tạo Drawer hoặc Modal xem chi tiết đơn hàng.
+- [x] Cập nhật trạng thái đơn hàng bằng các giá trị hợp lệ:
   - `ChoXacNhan`
   - `DaXacNhan`
   - `DangGiao`
   - `DaGiao`
   - `DaHuy`
-- [ ] Không cho chuyển trạng thái tùy ý nếu nghiệp vụ yêu cầu luồng tuần tự.
-- [ ] Thêm bộ lọc theo trạng thái.
-- [ ] Thêm tìm kiếm theo mã đơn hoặc tên người nhận.
-- [ ] Hiển thị tổng tiền đúng định dạng.
-- [ ] Thêm xác nhận trước khi xóa đơn.
-- [ ] Hiển thị thông báo sau khi cập nhật trạng thái.
+- [x] Không cho chuyển trạng thái tùy ý nếu nghiệp vụ yêu cầu luồng tuần tự.
+- [x] Thêm bộ lọc theo trạng thái.
+- [x] Thêm tìm kiếm theo mã đơn hoặc tên người nhận.
+- [x] Hiển thị tổng tiền đúng định dạng.
+- [x] Thêm xác nhận trước khi xóa đơn.
+- [x] Hiển thị thông báo sau khi cập nhật trạng thái.
 
 ### 3.6. Khách hàng và tài khoản
 
@@ -205,15 +207,15 @@ API tài khoản:
 - `PUT /tai-khoan/:id`
 - `DELETE /tai-khoan/:id`
 
-- [ ] Tách rõ danh sách khách hàng và danh sách tài khoản nếu cần.
-- [ ] Thêm tìm kiếm theo tên, username, email, số điện thoại.
-- [ ] Thêm phân trang.
-- [ ] Xem chi tiết tài khoản.
-- [ ] Chỉnh sửa họ tên, email, số điện thoại, địa chỉ.
-- [ ] Khóa/mở khóa tài khoản bằng `trang_thai`.
-- [ ] Không cho sửa/xóa tài khoản trái với quyền hiện tại.
-- [ ] Cân nhắc chặn Admin tự xóa chính mình.
-- [ ] Xác nhận trước khi xóa tài khoản.
+- [x] Tách rõ danh sách khách hàng và danh sách tài khoản nếu cần.
+- [x] Thêm tìm kiếm theo tên, username, email, số điện thoại.
+- [x] Thêm phân trang.
+- [x] Xem chi tiết tài khoản.
+- [x] Chỉnh sửa họ tên, email, số điện thoại, địa chỉ.
+- [x] Khóa/mở khóa tài khoản bằng `trang_thai`.
+- [x] Không cho sửa/xóa tài khoản trái với quyền hiện tại.
+- [x] Cân nhắc chặn Admin tự xóa chính mình.
+- [x] Xác nhận trước khi xóa tài khoản.
 
 ### 3.7. Nhân viên
 
@@ -225,13 +227,13 @@ API:
 - `PUT /nhan-vien/:id`
 - `DELETE /nhan-vien/:id`
 
-- [ ] Thêm form tạo nhân viên.
-- [ ] Chỉnh sửa thông tin nhân viên.
-- [ ] Xóa nhân viên sau khi xác nhận.
-- [ ] Hiển thị chức vụ, ngày vào làm, lương, trạng thái.
-- [ ] Thêm lọc `DangLam` và `NghiLam`.
-- [ ] Chỉ `Admin` được thấy nút thêm, sửa, xóa.
-- [ ] Kiểm tra liên kết giữa nhân viên và tài khoản.
+- [x] Thêm form tạo nhân viên.
+- [x] Chỉnh sửa thông tin nhân viên.
+- [x] Xóa nhân viên sau khi xác nhận.
+- [x] Hiển thị chức vụ, ngày vào làm, lương, trạng thái.
+- [x] Thêm lọc `DangLam` và `NghiLam`.
+- [x] Chỉ `Admin` được thấy nút thêm, sửa, xóa.
+- [x] Kiểm tra liên kết giữa nhân viên và tài khoản.
 
 ### 3.8. Đánh giá
 
@@ -239,13 +241,13 @@ API hiện tại lấy đánh giá theo sản phẩm:
 
 - `GET /danh-gia/san-pham/:ma_san_pham`
 
-- [ ] Không cố định mã sản phẩm `1`.
-- [ ] Thêm dropdown chọn sản phẩm.
-- [ ] Hoặc bổ sung API backend lấy toàn bộ đánh giá có phân trang.
-- [ ] Hiển thị tên người đánh giá, sản phẩm, số sao, nội dung và ngày đánh giá.
-- [ ] Thêm bộ lọc theo số sao và sản phẩm.
-- [ ] Thêm chức năng xóa đánh giá nếu nghiệp vụ quản trị cho phép.
-- [ ] Hiển thị trạng thái khi chưa có đánh giá.
+- [x] Không cố định mã sản phẩm `1`.
+- [x] Thêm dropdown chọn sản phẩm.
+- [x] Hoặc bổ sung API backend lấy toàn bộ đánh giá có phân trang.
+- [x] Hiển thị tên người đánh giá, sản phẩm, số sao, nội dung và ngày đánh giá.
+- [x] Thêm bộ lọc theo số sao và sản phẩm.
+- [x] Thêm chức năng xóa đánh giá nếu nghiệp vụ quản trị cho phép.
+- [x] Hiển thị trạng thái khi chưa có đánh giá.
 
 ### 3.9. Liên hệ
 
@@ -256,22 +258,22 @@ API:
 - `PUT /lien-he/:id`
 - `DELETE /lien-he/:id`
 
-- [ ] Hiển thị email, số điện thoại, tiêu đề, nội dung và ngày gửi.
-- [ ] Xem chi tiết nội dung liên hệ.
-- [ ] Cập nhật trạng thái:
+- [x] Hiển thị email, số điện thoại, tiêu đề, nội dung và ngày gửi.
+- [x] Xem chi tiết nội dung liên hệ.
+- [x] Cập nhật trạng thái:
   - `ChuaXuLy`
   - `DangXuLy`
   - `DaXuLy`
-- [ ] Thêm lọc theo trạng thái.
-- [ ] Thêm tìm kiếm theo họ tên, email, tiêu đề.
-- [ ] Xóa liên hệ sau khi xác nhận.
-- [ ] Hiển thị badge màu theo trạng thái.
+- [x] Thêm lọc theo trạng thái.
+- [x] Thêm tìm kiếm theo họ tên, email, tiêu đề.
+- [x] Xóa liên hệ sau khi xác nhận.
+- [x] Hiển thị badge màu theo trạng thái.
 
 ## 4. Chuẩn hóa API và TypeScript
 
-- [ ] Tạo type dùng chung cho `ApiResponse`, phân trang và lỗi API.
-- [ ] Hạn chế dùng `any` trong các page.
-- [ ] Tạo các file API riêng:
+- [x] Tạo type dùng chung cho `ApiResponse`, phân trang và lỗi API.
+- [x] Hạn chế dùng `any` trong các page.
+- [x] Tạo các file API riêng:
   - `product.api.ts`
   - `category.api.ts`
   - `brand.api.ts`
@@ -280,37 +282,39 @@ API:
   - `employee.api.ts`
   - `review.api.ts`
   - `contact.api.ts`
-- [ ] Tạo helper xử lý lỗi API thống nhất.
-- [ ] Hiển thị lỗi validation từ backend dưới đúng field trong form.
-- [ ] Chuẩn hóa việc định dạng số tiền, ngày tháng và trạng thái.
-- [ ] Kiểm tra response API không bị truy cập sai khi `data` rỗng.
+- [x] Tạo helper xử lý lỗi API thống nhất.
+- [x] Hiển thị lỗi validation từ backend dưới đúng field trong form.
+- [x] Chuẩn hóa việc định dạng số tiền, ngày tháng và trạng thái.
+- [x] Kiểm tra response API không bị truy cập sai khi `data` rỗng.
 
 ## 5. UX và chất lượng giao diện
 
-- [ ] Thay `alert()` bằng `message` hoặc `notification` của Ant Design.
-- [ ] Thêm `Spin`, `Skeleton` hoặc trạng thái loading cho bảng.
-- [ ] Thêm `Empty` khi danh sách không có dữ liệu.
-- [ ] Disable nút trong lúc đang gửi request.
-- [ ] Chống gửi form nhiều lần.
-- [ ] Thêm Modal xác nhận khi xóa hoặc thao tác nguy hiểm.
-- [ ] Hiển thị lỗi kết nối rõ ràng.
-- [ ] Đảm bảo bảng có scroll ngang trên màn hình nhỏ.
-- [ ] Dùng tiếng Việt thống nhất trong toàn bộ giao diện.
-- [ ] Thêm title cho từng trang và breadcrumb nếu cần.
+- [x] Thay `alert()` bằng `message` hoặc `notification` của Ant Design.
+- [x] Thêm `Spin`, `Skeleton` hoặc trạng thái loading cho bảng.
+- [x] Thêm `Empty` khi danh sách không có dữ liệu.
+- [x] Disable nút trong lúc đang gửi request.
+- [x] Chống gửi form nhiều lần.
+- [x] Thêm Modal xác nhận khi xóa hoặc thao tác nguy hiểm.
+- [x] Hiển thị lỗi kết nối rõ ràng.
+- [x] Đảm bảo bảng có scroll ngang trên màn hình nhỏ.
+- [x] Dùng tiếng Việt thống nhất trong toàn bộ giao diện.
+- [x] Thêm title cho từng trang và breadcrumb nếu cần.
 
 ## 6. Bảo mật và cấu hình
 
-- [ ] Không commit file `.env`.
-- [ ] Cấu hình `VITE_API_URL` trong `.env` hoặc `.env.local`.
-- [ ] Không để mật khẩu mặc định trong giao diện production.
-- [ ] Kiểm tra quyền ở backend, không chỉ ẩn nút ở frontend.
-- [ ] Không hiển thị token trong giao diện hoặc log.
-- [ ] Xử lý logout khi API trả `401`.
-- [ ] Cấu hình CORS backend phù hợp với domain admin production.
+- [x] Không commit file `.env`.
+- [x] Cấu hình `VITE_API_URL` trong `.env` hoặc `.env.local`.
+- [x] Không để mật khẩu mặc định trong giao diện production.
+- [x] Kiểm tra quyền ở backend, không chỉ ẩn nút ở frontend.
+- [x] Không hiển thị token trong giao diện hoặc log.
+- [x] Xử lý logout khi API trả `401`.
+- [ ] Điền domain admin production thật vào `CORS_ORIGINS` và kiểm tra khi triển khai (backend đã hỗ trợ allowlist).
 
 ## 7. Kiểm thử bắt buộc
 
-- [ ] `npm run build` chạy thành công trong `FE/admin`.
+Các mục chưa tích dưới đây cần chạy với tài khoản và API/MySQL thật. Bộ kiểm thử tự động dùng dữ liệu giả lập đã đạt; không thay thế kiểm thử tích hợp.
+
+- [x] `npm run build` chạy thành công trong `FE/admin`.
 - [ ] Đăng nhập đúng tài khoản Admin.
 - [ ] Tài khoản Khách hàng không truy cập được admin.
 - [ ] Tài khoản Nhân viên chỉ thấy chức năng được phép.
@@ -323,8 +327,8 @@ API:
 - [ ] Khóa/mở khóa khách hàng.
 - [ ] Thêm/sửa/xóa nhân viên theo đúng quyền.
 - [ ] Cập nhật trạng thái liên hệ.
-- [ ] Kiểm tra giao diện desktop và mobile.
-- [ ] Kiểm tra các trạng thái loading, empty, error và success.
+- [x] Kiểm tra giao diện desktop và mobile. (Chrome, API giả lập)
+- [x] Kiểm tra các trạng thái loading, empty, error và success. (Chrome, API giả lập)
 
 ## 8. Thứ tự triển khai đề xuất
 

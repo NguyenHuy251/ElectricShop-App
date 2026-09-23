@@ -1,3 +1,4 @@
+import { duplicateField } from '../utils/adminErrors.js';
 import { Request, Response } from 'express';
 import { pool } from '../config/database.js';
 import { sendError, sendSuccess } from '../utils/response.js';
@@ -6,6 +7,7 @@ export async function getAllSanPham(req: Request, res: Response) {
   try {
     const { page = 1, limit = 10, search = '', ma_danh_muc, ma_thuong_hieu, min_price, max_price } = req.query;
 
+    if (!Number.isInteger(Number(page)) || Number(page) < 1 || !Number.isInteger(Number(limit)) || Number(limit) < 1 || Number(limit) > 100) return sendError(res, 400, 'Phân trang không hợp lệ');
     const offset = (Number(page) - 1) * Number(limit);
     const searchTerm = String(search || '').trim();
 
@@ -40,7 +42,7 @@ export async function getAllSanPham(req: Request, res: Response) {
     const whereSql = whereClauses.length ? `WHERE ${whereClauses.join(' AND ')}` : '';
 
     const [countRows] = await pool.query(
-      `SELECT COUNT(*) as total FROM san_pham sp ${whereSql.length ? ` ${whereSql}` : ''}`,
+      `SELECT COUNT(*) as total FROM san_pham sp LEFT JOIN danh_muc dm ON dm.ma_danh_muc = sp.ma_danh_muc ${whereSql.length ? ` ${whereSql}` : ''}`,
       values,
     );
 
@@ -74,6 +76,7 @@ export async function getAllSanPham(req: Request, res: Response) {
       totalPages: Math.ceil(Number(total) / Number(limit)),
     });
   } catch (error) {
+    if (duplicateField(error, res, 'ma_san_pham_code', 'Mã sản phẩm đã tồn tại')) return;
     return sendError(res, 500, 'Lỗi khi lấy danh sách sản phẩm', [(error as Error).message]);
   }
 }
@@ -105,6 +108,7 @@ export async function getSanPhamById(req: Request, res: Response) {
 
     return sendSuccess(res, 'Sản phẩm được tìm thấy', result[0]);
   } catch (error) {
+    if (duplicateField(error, res, 'ma_san_pham_code', 'Mã sản phẩm đã tồn tại')) return;
     return sendError(res, 500, 'Lỗi khi lấy sản phẩm', [(error as Error).message]);
   }
 }
@@ -137,7 +141,7 @@ export async function createSanPham(req: Request, res: Response) {
 
     const [existing] = await pool.query('SELECT ma_san_pham FROM san_pham WHERE ma_san_pham_code = ?', [ma_san_pham_code]);
     if ((existing as any[]).length) {
-      return sendError(res, 409, 'Mã sản phẩm đã tồn tại');
+      return res.status(409).json({ success: false, message: 'Mã sản phẩm đã tồn tại', fieldErrors: { ma_san_pham_code: 'Mã sản phẩm đã tồn tại' } });
     }
 
     const [result] = await pool.execute(
@@ -157,6 +161,7 @@ export async function createSanPham(req: Request, res: Response) {
 
     return sendSuccess(res, 'Thêm sản phẩm thành công', { ma_san_pham: maSanPham });
   } catch (error) {
+    if (duplicateField(error, res, 'ma_san_pham_code', 'Mã sản phẩm đã tồn tại')) return;
     return sendError(res, 500, 'Lỗi khi thêm sản phẩm', [(error as Error).message]);
   }
 }
@@ -199,6 +204,7 @@ export async function updateSanPham(req: Request, res: Response) {
 
     return sendSuccess(res, 'Cập nhật sản phẩm thành công', { ma_san_pham: Number(id) });
   } catch (error) {
+    if (duplicateField(error, res, 'ma_san_pham_code', 'Mã sản phẩm đã tồn tại')) return;
     return sendError(res, 500, 'Lỗi khi cập nhật sản phẩm', [(error as Error).message]);
   }
 }
@@ -212,6 +218,8 @@ export async function deleteSanPham(req: Request, res: Response) {
     await pool.query('DELETE FROM san_pham WHERE ma_san_pham = ?', [id]);
     return sendSuccess(res, 'Xóa sản phẩm thành công', { ma_san_pham: Number(id) });
   } catch (error) {
+    if (duplicateField(error, res, 'ma_san_pham_code', 'Mã sản phẩm đã tồn tại')) return;
+    if ((error as { code?: string }).code === 'ER_ROW_IS_REFERENCED_2') return sendError(res, 409, 'Sản phẩm đang được sử dụng trong đơn hàng, không thể xóa.');
     return sendError(res, 500, 'Lỗi khi xóa sản phẩm', [(error as Error).message]);
   }
 }
