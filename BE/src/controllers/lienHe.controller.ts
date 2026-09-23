@@ -46,6 +46,7 @@ export async function updateLienHe(req: Request, res: Response) {
   try {
     const { id } = req.params;
     const { trang_thai } = req.body;
+    if (!['ChuaXuLy', 'DangXuLy', 'DaXuLy'].includes(trang_thai)) return sendError(res, 400, 'Trạng thái liên hệ không hợp lệ');
 
     const [rows] = await pool.query('SELECT * FROM lien_he WHERE ma_lien_he = ?', [id]);
     if (!(rows as any[]).length) return sendError(res, 404, 'Không tìm thấy liên hệ');

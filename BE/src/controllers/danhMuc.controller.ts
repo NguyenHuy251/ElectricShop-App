@@ -1,3 +1,4 @@
+import { duplicateField } from '../utils/adminErrors.js';
 import { Request, Response } from 'express';
 import { pool } from '../config/database.js';
 import { sendError, sendSuccess } from '../utils/response.js';
@@ -7,6 +8,7 @@ export async function getAllDanhMuc(req: Request, res: Response) {
     const [rows] = await pool.query('SELECT * FROM danh_muc ORDER BY ma_danh_muc DESC');
     return sendSuccess(res, 'Danh sách danh mục', rows);
   } catch (error) {
+    if (duplicateField(error, res, 'ten_danh_muc', 'Tên danh mục đã tồn tại')) return;
     return sendError(res, 500, 'Lỗi khi lấy danh mục', [(error as Error).message]);
   }
 }
@@ -19,6 +21,7 @@ export async function getDanhMucById(req: Request, res: Response) {
     if (!result.length) return sendError(res, 404, 'Không tìm thấy danh mục');
     return sendSuccess(res, 'Danh mục được tìm thấy', result[0]);
   } catch (error) {
+    if (duplicateField(error, res, 'ten_danh_muc', 'Tên danh mục đã tồn tại')) return;
     return sendError(res, 500, 'Lỗi khi lấy danh mục', [(error as Error).message]);
   }
 }
@@ -36,6 +39,7 @@ export async function createDanhMuc(req: Request, res: Response) {
     const insertResult = result as { insertId: number };
     return sendSuccess(res, 'Thêm danh mục thành công', { ma_danh_muc: insertResult.insertId });
   } catch (error) {
+    if (duplicateField(error, res, 'ten_danh_muc', 'Tên danh mục đã tồn tại')) return;
     return sendError(res, 500, 'Lỗi khi thêm danh mục', [(error as Error).message]);
   }
 }
@@ -56,6 +60,7 @@ export async function updateDanhMuc(req: Request, res: Response) {
 
     return sendSuccess(res, 'Cập nhật danh mục thành công', { ma_danh_muc: Number(id) });
   } catch (error) {
+    if (duplicateField(error, res, 'ten_danh_muc', 'Tên danh mục đã tồn tại')) return;
     return sendError(res, 500, 'Lỗi khi cập nhật danh mục', [(error as Error).message]);
   }
 }
@@ -70,6 +75,8 @@ export async function deleteDanhMuc(req: Request, res: Response) {
     await pool.query('DELETE FROM danh_muc WHERE ma_danh_muc = ?', [id]);
     return sendSuccess(res, 'Xóa danh mục thành công', { ma_danh_muc: Number(id) });
   } catch (error) {
+    if (duplicateField(error, res, 'ten_danh_muc', 'Tên danh mục đã tồn tại')) return;
+    if ((error as { code?: string }).code === 'ER_ROW_IS_REFERENCED_2') return sendError(res, 409, 'Danh mục đang được sản phẩm sử dụng, không thể xóa.');
     return sendError(res, 500, 'Lỗi khi xóa danh mục', [(error as Error).message]);
   }
 }

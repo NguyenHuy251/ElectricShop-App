@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { createDonHang, deleteDonHang, getDonHang, getDonHangById, updateTrangThaiDonHang } from '../controllers/donHang.controller.js';
+import { cancelDonHang, createDonHang, deleteDonHang, getDonHang, getDonHangById, updateTrangThaiDonHang } from '../controllers/donHang.controller.js';
 import { authenticate } from '../middleware/auth.middleware.js';
 import { authorize } from '../middleware/role.middleware.js';
 
@@ -9,6 +9,7 @@ router.post('/', authenticate, authorize('Admin', 'NhanVien', 'KhachHang'), crea
 router.get('/', authenticate, authorize('Admin', 'NhanVien', 'KhachHang'), getDonHang);
 router.get('/:id', authenticate, authorize('Admin', 'NhanVien', 'KhachHang'), getDonHangById);
 router.put('/:id/trang-thai', authenticate, authorize('Admin', 'NhanVien'), updateTrangThaiDonHang);
+router.put('/:id/huy', authenticate, authorize('KhachHang'), cancelDonHang);
 router.delete('/:id', authenticate, authorize('Admin', 'NhanVien'), deleteDonHang);
 
 export default router;
