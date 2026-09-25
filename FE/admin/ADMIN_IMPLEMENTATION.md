@@ -1,4 +1,4 @@
-# Hoàn thiện Admin 
+# Hoàn thiện Admin — 23/09/2026
 
 Đã triển khai các chức năng trong `ADMIN_TASKS.md`: layout chung, xác thực `/auth/me`, phân quyền, dashboard, sản phẩm, danh mục, thương hiệu, đơn hàng, tài khoản, nhân viên, đánh giá và liên hệ. Các route cũ được giữ nguyên. Danh sách tài khoản mặc định lọc khách hàng; Admin có thể bỏ lọc để xem tất cả tài khoản. Không cung cấp chức năng tạo tài khoản qua API không tồn tại.
 

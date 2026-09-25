@@ -25,6 +25,7 @@ export async function getAllDanhGia(req: Request, res: Response) {
   } catch (error) { return sendError(res, 500, 'Không thể tải đánh giá'); }
 }
 
+
 export async function getDanhGiaBySanPham(req: Request, res: Response) {
   try {
     const { ma_san_pham } = req.params;

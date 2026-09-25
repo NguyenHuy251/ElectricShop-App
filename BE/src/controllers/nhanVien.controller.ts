@@ -11,6 +11,7 @@ async function validateAccount(accountId: unknown, employeeId?: string | string[
   return employees.length ? 'Tài khoản đã liên kết với nhân viên khác' : '';
 }
 
+
 export async function getAllNhanVien(req: Request, res: Response) {
   try {
     const rows = await nhanVienService.listNhanVien();
