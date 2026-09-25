@@ -17,17 +17,21 @@ import sanPhamRoutes from './routes/sanPham.routes.js';
 import taiKhoanRoutes from './routes/taiKhoan.routes.js';
 import thuongHieuRoutes from './routes/thuongHieu.routes.js';
 import { errorHandler, notFoundHandler } from './middleware/error.middleware.js';
+import { adminValidation } from './middleware/adminValidation.middleware.js';
 
 dotenv.config();
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
 
-app.use(cors({ origin: true, credentials: true }));
+const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:5173,http://localhost:5174,http://localhost:8081').split(',').map(value => value.trim()).filter(Boolean);
+if (process.env.NODE_ENV === 'production' && !process.env.CORS_ORIGINS) throw new Error('CORS_ORIGINS must be configured in production');
+app.use(cors({ origin: (origin, callback) => callback(null, !origin || allowedOrigins.includes(origin)), credentials: true }));
 app.use(helmet());
 app.use(morgan('dev'));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
+app.use('/api', adminValidation);
 
 app.get('/api/health', (_req, res) => {
   res.json({ success: true, message: 'API is running', data: { status: 'ok' } });

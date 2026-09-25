@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
-import { pool } from '../config/database.js';
 import { AuthRequest } from '../middleware/auth.middleware.js';
 import { sendError, sendSuccess } from '../utils/response.js';
+import { lienHeService } from '../services/lienHe.service.js';
 
 export async function createLienHe(req: AuthRequest, res: Response) {
   try {
@@ -11,12 +11,9 @@ export async function createLienHe(req: AuthRequest, res: Response) {
     }
 
     const maTaiKhoan = req.user?.ma_tai_khoan ?? null;
-    const [result] = await pool.execute(
-      'INSERT INTO lien_he (ma_tai_khoan, ho_ten, email, so_dien_thoai, tieu_de, noi_dung, trang_thai, ngay_gui) VALUES (?, ?, ?, ?, ?, ?, ?, NOW())',
-      [maTaiKhoan, ho_ten, email, so_dien_thoai || null, tieu_de, noi_dung, 'ChuaXuLy'],
-    );
+    const result = await lienHeService.create([maTaiKhoan, ho_ten, email, so_dien_thoai || null, tieu_de, noi_dung]);
 
-    return sendSuccess(res, 'Gửi liên hệ thành công', { ma_lien_he: (result as any).insertId });
+    return sendSuccess(res, 'Gửi liên hệ thành công', { ma_lien_he: (result[0] as any).insertId });
   } catch (error) {
     return sendError(res, 500, 'Lỗi khi gửi liên hệ', [(error as Error).message]);
   }
@@ -24,7 +21,7 @@ export async function createLienHe(req: AuthRequest, res: Response) {
 
 export async function getAllLienHe(req: Request, res: Response) {
   try {
-    const [rows] = await pool.query('SELECT * FROM lien_he ORDER BY ma_lien_he DESC');
+    const rows = await lienHeService.list();
     return sendSuccess(res, 'Danh sách liên hệ', rows);
   } catch (error) {
     return sendError(res, 500, 'Lỗi khi lấy danh sách liên hệ', [(error as Error).message]);
@@ -34,9 +31,9 @@ export async function getAllLienHe(req: Request, res: Response) {
 export async function getLienHeById(req: Request, res: Response) {
   try {
     const { id } = req.params;
-    const [rows] = await pool.query('SELECT * FROM lien_he WHERE ma_lien_he = ?', [id]);
-    if (!(rows as any[]).length) return sendError(res, 404, 'Không tìm thấy liên hệ');
-    return sendSuccess(res, 'Chi tiết liên hệ', (rows as any[])[0]);
+    const rows = await lienHeService.getById(Number(id));
+    if (!rows.length) return sendError(res, 404, 'Không tìm thấy liên hệ');
+    return sendSuccess(res, 'Chi tiết liên hệ', rows[0]);
   } catch (error) {
     return sendError(res, 500, 'Lỗi khi lấy liên hệ', [(error as Error).message]);
   }
@@ -46,11 +43,12 @@ export async function updateLienHe(req: Request, res: Response) {
   try {
     const { id } = req.params;
     const { trang_thai } = req.body;
+    if (!['ChuaXuLy', 'DangXuLy', 'DaXuLy'].includes(trang_thai)) return sendError(res, 400, 'Trạng thái liên hệ không hợp lệ');
 
-    const [rows] = await pool.query('SELECT * FROM lien_he WHERE ma_lien_he = ?', [id]);
-    if (!(rows as any[]).length) return sendError(res, 404, 'Không tìm thấy liên hệ');
+    const rows = await lienHeService.getById(Number(id));
+    if (!rows.length) return sendError(res, 404, 'Không tìm thấy liên hệ');
 
-    await pool.execute('UPDATE lien_he SET trang_thai = ? WHERE ma_lien_he = ?', [trang_thai, id]);
+    await lienHeService.updateStatus([Number(id), trang_thai]);
     return sendSuccess(res, 'Cập nhật trạng thái liên hệ thành công', { ma_lien_he: Number(id), trang_thai });
   } catch (error) {
     return sendError(res, 500, 'Lỗi khi cập nhật liên hệ', [(error as Error).message]);
@@ -60,10 +58,10 @@ export async function updateLienHe(req: Request, res: Response) {
 export async function deleteLienHe(req: Request, res: Response) {
   try {
     const { id } = req.params;
-    const [rows] = await pool.query('SELECT * FROM lien_he WHERE ma_lien_he = ?', [id]);
-    if (!(rows as any[]).length) return sendError(res, 404, 'Không tìm thấy liên hệ');
+    const rows = await lienHeService.getById(Number(id));
+    if (!rows.length) return sendError(res, 404, 'Không tìm thấy liên hệ');
 
-    await pool.execute('DELETE FROM lien_he WHERE ma_lien_he = ?', [id]);
+    await lienHeService.remove(Number(id));
     return sendSuccess(res, 'Xóa liên hệ thành công', { ma_lien_he: Number(id) });
   } catch (error) {
     return sendError(res, 500, 'Lỗi khi xóa liên hệ', [(error as Error).message]);

@@ -1,87 +1,25 @@
-import { useEffect, useState } from 'react';
+import { useCallback } from 'react';
+import { Button, Empty, Progress, Spin, Table } from 'antd';
+import { Link } from 'react-router-dom';
 import { api } from '../api/api';
-import AdminSidebar from '../components/AdminSidebar';
-import type { DashboardStatistics, Order, Product } from '../types';
-
-const statusLabels: Record<string, string> = {
-  ChoXacNhan: 'Chờ xác nhận',
-  DaXacNhan: 'Đã xác nhận',
-  DangGiao: 'Đang giao',
-  DaGiao: 'Đã giao',
-  DaHuy: 'Đã hủy',
-};
-
-const formatCurrency = (value: number | string) => `${Number(value || 0).toLocaleString('vi-VN')}đ`;
-const formatDate = (value?: string) => value ? new Date(value).toLocaleDateString('vi-VN') : '-';
-
+import { orderApi } from '../api/order.api';
+import { useLoad } from '../hooks/useLoad';
+import LoadError from '../components/LoadError';
+import { dateTime, money, Status } from '../utils/format';
+import type { ApiResponse, DashboardStatistics, Order } from '../types';
 export default function DashboardPage() {
-  const [stats, setStats] = useState<DashboardStatistics | null>(null);
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-
-  const fetchDashboard = async () => {
-    setLoading(true);
-    try {
-      const [statsResponse, ordersResponse, productsResponse] = await Promise.all([
-        api.get('/dashboard'),
-        api.get('/don-hang'),
-        api.get('/san-pham', { params: { limit: 100 } }),
-      ]);
-      setStats(statsResponse.data.data);
-      setOrders(ordersResponse.data.data || []);
-      setProducts(productsResponse.data.data || []);
-      setError('');
-    } catch {
-      setError('Không thể tải dữ liệu dashboard. Vui lòng thử lại.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchDashboard();
-  }, []);
-
-  if (loading && !stats) return <div className="layout"><AdminSidebar /><main className="main"><div className="page dashboard-loading">Đang tải tổng quan...</div></main></div>;
-  if (!stats) return <div className="layout"><AdminSidebar /><main className="main"><div className="page"><div className="error-box">{error || 'Không có dữ liệu dashboard'} <button className="secondary-btn" onClick={fetchDashboard}>Thử lại</button></div></div></main></div>;
-
-  const recentOrders = orders.slice(0, 5);
-  const lowStockProducts = products.filter((product) => Number(product.so_luong) <= 5).slice(0, 5);
-  const totalTrackedOrders = stats.tong_don_hang || 1;
-  const progressItems = [
-    { label: 'Chờ xác nhận', value: stats.so_don_cho_xac_nhan, className: 'progress-warning' },
-    { label: 'Đang giao', value: stats.so_don_dang_giao, className: 'progress-info' },
-    { label: 'Đã giao', value: stats.so_don_da_giao, className: 'progress-success' },
-    { label: 'Đã hủy', value: stats.so_don_da_huy, className: 'progress-danger' },
-  ];
-
-  return (
-    <div className="layout">
-      <AdminSidebar />
-      <main className="main">
-        <div className="topbar"><div><strong>Tổng quan vận hành</strong><span className="topbar-subtitle">Theo dõi tình hình cửa hàng hôm nay</span></div><div className="topbar-actions"><span>{new Date().toLocaleDateString('vi-VN')}</span><button className="secondary-btn" onClick={fetchDashboard}>↻ Làm mới</button></div></div>
-        <div className="page">
-          {error ? <div className="error-box">{error}</div> : null}
-          <div className="dashboard-intro"><div><span className="eyebrow">ELECTRIC SHOP ADMIN</span><h1 className="page-title">Xin chào, quản trị viên</h1><p className="dashboard-caption">Đây là tình hình hoạt động mới nhất của cửa hàng.</p></div><div className="live-pill"><span /> Dữ liệu trực tiếp</div></div>
-          <div className="grid dashboard-stats">
-            <div className="stat-box"><div className="label">Sản phẩm</div><h2>{stats.tong_san_pham}</h2><span className="stat-hint">Đang quản lý</span></div>
-            <div className="stat-box"><div className="label">Khách hàng</div><h2>{stats.tong_khach_hang}</h2><span className="stat-hint">Tài khoản khách</span></div>
-            <div className="stat-box"><div className="label">Nhân viên</div><h2>{stats.tong_nhan_vien}</h2><span className="stat-hint">Đang làm việc</span></div>
-            <div className="stat-box"><div className="label">Đơn hàng</div><h2>{stats.tong_don_hang}</h2><span className="stat-hint">Tất cả trạng thái</span></div>
-            <div className="stat-box revenue-box"><div className="label">Doanh thu</div><h2>{formatCurrency(stats.tong_doanh_thu)}</h2><span className="stat-hint">Đơn đang xử lý và đã giao</span></div>
-          </div>
-          <div className="dashboard-columns mt">
-            <section className="card dashboard-panel"><div className="panel-heading"><div><span className="eyebrow">THEO DÕI</span><h3>Tiến độ đơn hàng</h3></div><a href="/orders">Xem tất cả →</a></div><div className="progress-list">{progressItems.map((item) => <div className="progress-item" key={item.label}><div className="progress-label"><span>{item.label}</span><strong>{item.value}</strong></div><div className="progress-track"><div className={`progress-fill ${item.className}`} style={{ width: `${Math.min(100, (item.value / totalTrackedOrders) * 100)}%` }} /></div></div>)}</div></section>
-            <section className="card dashboard-panel alert-panel"><div className="panel-heading"><div><span className="eyebrow">CẦN XỬ LÝ</span><h3>Đơn chờ xác nhận</h3></div><span className="count-badge">{stats.so_don_cho_xac_nhan}</span></div>{stats.so_don_cho_xac_nhan > 0 ? <p>Có đơn hàng đang chờ nhân viên kiểm tra và xác nhận.</p> : <p className="success-copy">Tuyệt vời, hiện không có đơn nào cần xử lý.</p>}<a className="panel-link" href="/orders">Mở quản lý đơn hàng →</a></section>
-          </div>
-          <div className="dashboard-columns mt">
-            <section className="card dashboard-panel"><div className="panel-heading"><div><span className="eyebrow">MỚI NHẤT</span><h3>Đơn hàng gần đây</h3></div><a href="/orders">Xem tất cả →</a></div>{recentOrders.length ? <div className="recent-orders">{recentOrders.map((order) => <div className="recent-order" key={order.ma_don_hang}><div className="order-avatar">#{order.ma_don_hang}</div><div className="recent-order-info"><strong>{order.ho_ten_nguoi_nhan}</strong><span>{formatDate(order.ngay_dat)} · {order.items?.length || 0} sản phẩm</span></div><div className="recent-order-total"><strong>{formatCurrency(order.tong_tien)}</strong><span className={`status-dot ${order.trang_thai}`}>{statusLabels[order.trang_thai] || order.trang_thai}</span></div></div>)}</div> : <p className="empty-copy">Chưa có đơn hàng.</p>}</section>
-            <section className="card dashboard-panel"><div className="panel-heading"><div><span className="eyebrow">KHO HÀNG</span><h3>Sản phẩm sắp hết</h3></div><a href="/products">Quản lý kho →</a></div>{lowStockProducts.length ? <div className="stock-list">{lowStockProducts.map((product) => <div className="stock-item" key={product.ma_san_pham}><div className="stock-image">{product.hinh_anh ? <img src={product.hinh_anh} alt="" /> : '—'}</div><div><strong>{product.ten_san_pham}</strong><span>{product.ma_san_pham_code}</span></div><b className={Number(product.so_luong) === 0 ? 'out-stock' : ''}>{product.so_luong} sp</b></div>)}</div> : <p className="success-copy">Tồn kho đang ổn định.</p>}</section>
-          </div>
-        </div>
-      </main>
-    </div>
-  );
+  const result = useLoad(useCallback(async () => {
+    const [statistics, orders] = await Promise.all([api.get<ApiResponse<DashboardStatistics>>('/dashboard'), orderApi.list()]);
+    if (!statistics.data.data) throw new Error('Máy chủ chưa trả dữ liệu thống kê');
+    return { stats: statistics.data.data, orders: orders.data || [] };
+  }, []));
+  const stats = result.data?.stats;
+  const revenue = stats?.doanh_thu_theo_thang || [];
+  const max = Math.max(1, ...revenue.map(row => Number(row.doanh_thu)));
+  return <><div className="page-heading"><h1 className="page-title">Tổng quan cửa hàng</h1><Button onClick={result.reload} disabled={result.loading}>Làm mới</Button></div><LoadError error={result.error} retry={result.reload} />
+    <Spin spinning={result.loading}><div className="loading-content">{stats && <><div className="grid">{[['Sản phẩm', stats.tong_san_pham], ['Khách hàng', stats.tong_khach_hang], ['Nhân viên', stats.tong_nhan_vien], ['Đơn hàng', stats.tong_don_hang], ['Doanh thu đơn đã giao', money(stats.tong_doanh_thu)]].map(([label, value]) => <div className="stat-box" key={label}><span className="label">{label}</span><h2>{value}</h2></div>)}</div>
+      <div className="dashboard-columns mt"><section className="card"><h3>Doanh thu 12 tháng · đơn đã giao</h3>{revenue.length ? <div className="revenue-chart" role="img" aria-label="Biểu đồ doanh thu theo tháng">{revenue.map(row => <div key={row.thang} className="revenue-column"><span className="revenue-value">{money(row.doanh_thu)}</span><div className="revenue-bar-track"><div className="revenue-bar" style={{ height: `${Number(row.doanh_thu) / max * 100}%` }} /></div><small>{row.thang}</small></div>)}</div> : <Empty description="Chưa có doanh thu" />}</section>
+      <section className="card"><h3>Đơn hàng theo trạng thái</h3>{([['ChoXacNhan', stats.so_don_cho_xac_nhan], ['DaXacNhan', stats.so_don_da_xac_nhan], ['DangGiao', stats.so_don_dang_giao], ['DaGiao', stats.so_don_da_giao], ['DaHuy', stats.so_don_da_huy]] as [string, number][]).map(([status, count]) => <div key={status}><div className="row"><Status value={status} /><strong>{count}</strong></div><Progress percent={stats.tong_don_hang ? count / stats.tong_don_hang * 100 : 0} showInfo={false} /></div>)}</section></div>
+      <section className="card mt"><div className="panel-heading"><h3>Đơn hàng mới nhất</h3><Link to="/orders">Xem tất cả</Link></div><Table<Order> rowKey="ma_don_hang" dataSource={result.data?.orders.slice(0, 5)} pagination={false} scroll={{ x: 650 }} locale={{ emptyText: <Empty description="Chưa có đơn hàng" /> }} columns={[{ title: 'Mã', dataIndex: 'ma_don_hang' }, { title: 'Người nhận', dataIndex: 'ho_ten_nguoi_nhan' }, { title: 'Ngày đặt', dataIndex: 'ngay_dat', render: dateTime }, { title: 'Tổng tiền', dataIndex: 'tong_tien', render: money }, { title: 'Trạng thái', dataIndex: 'trang_thai', render: value => <Status value={value} /> }]} /></section>
+    </>}</div></Spin></>;
 }
