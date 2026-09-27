@@ -39,6 +39,9 @@ export default function RootLayout() {
         <Stack.Screen name="(auth)" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="product/[id]" options={{ title: 'Chi tiết sản phẩm' }} />
+        <Stack.Screen name="order/[id]" options={{ title: 'Chi tiết đơn hàng' }} />
+        <Stack.Screen name="checkout" options={{ title: 'Thanh toán' }} />
+        <Stack.Screen name="checkout-success" options={{ title: 'Đơn hàng của bạn', headerBackVisible: false }} />
         <Stack.Screen name="modal" options={{ presentation: 'modal', headerShown: false }} />
       </Stack>
       <StatusBar style="dark" />

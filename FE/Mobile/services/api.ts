@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE_URL } from '../constants/api';
 
@@ -24,6 +25,9 @@ api.interceptors.response.use(
     if (error.response?.status === 401) {
       await AsyncStorage.removeItem('token');
       await AsyncStorage.removeItem('user');
+      if (error.config?.headers?.Authorization && !['/auth/login', '/auth/register'].includes(error.config?.url)) {
+        router.replace('/(auth)/login');
+      }
     }
     return Promise.reject(error);
   },

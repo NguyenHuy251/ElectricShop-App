@@ -7,6 +7,7 @@ import { productService } from '../../services/product.service';
 import type { Product } from '../../types';
 import { EmptyState, LoadingState, ProductCard, ScreenHeading } from '@/components/shop-ui';
 import { shop } from '@/constants/shop-theme';
+import { getApiMessage } from '@/utils/format';
 
 export default function ProductsScreen() {
   const { category } = useLocalSearchParams<{ category?: string }>();
@@ -25,8 +26,8 @@ export default function ProductsScreen() {
     try {
       const result = await productService.getProducts({ search: nextSearch, limit: 50 });
       setProducts(result.data || []);
-    } catch {
-      setError('Không thể tải danh sách sản phẩm');
+    } catch (error) {
+      setError(getApiMessage(error, 'Không thể tải danh sách sản phẩm'));
     } finally {
       setLoading(false);
       setRefreshing(false);

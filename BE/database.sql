@@ -189,6 +189,18 @@ CREATE TABLE don_hang (
 -- =========================================================
 -- 10. CHI TIET DON HANG
 -- =========================================================
+-- Additive migration: preserves all existing orders and products.
+CREATE TABLE IF NOT EXISTS checkout_requests (
+    ma_tai_khoan INT NOT NULL,
+    request_id VARCHAR(100) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    request_hash CHAR(64) CHARACTER SET ascii NOT NULL,
+    response_json JSON NOT NULL,
+    ngay_tao DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (ma_tai_khoan, request_id),
+    FOREIGN KEY (ma_tai_khoan) REFERENCES tai_khoan(ma_tai_khoan) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
 CREATE TABLE chi_tiet_don_hang (
     ma_don_hang INT NOT NULL,
     ma_san_pham INT NOT NULL,
@@ -261,11 +273,11 @@ CREATE TABLE lien_he (
 INSERT INTO tai_khoan
 (ten_dang_nhap, mat_khau, ho_ten, email, so_dien_thoai, dia_chi, vai_tro)
 VALUES
-('admin', '$2a$10$QKq1RjYeIXkPj2RKW8rsz.l.Kam2J4Igp7C.wMagYyTEklNXRHNjO', 'Quan tri vien', 'admin@gmail.com', '0900000001', 'Hung Yen', 'Admin'),
-('nhanvien01', '$2a$10$QKq1RjYeIXkPj2RKW8rsz.l.Kam2J4Igp7C.wMagYyTEklNXRHNjO', 'Nguyen Van An', 'nhanvien@gmail.com', '0900000002', 'Hung Yen', 'NhanVien'),
-('huy2005', '$2a$10$QKq1RjYeIXkPj2RKW8rsz.l.Kam2J4Igp7C.wMagYyTEklNXRHNjO', 'Nguyen Duc Huy', 'huy@gmail.com', '0900000003', 'Hung Yen', 'KhachHang'),
-('ngoc2004', '$2a$10$QKq1RjYeIXkPj2RKW8rsz.l.Kam2J4Igp7C.wMagYyTEklNXRHNjO', 'Tran Thi Ngoc', 'ngoc@gmail.com', '0900000004', 'Ha Noi', 'KhachHang'),
-('nam2003', '$2a$10$QKq1RjYeIXkPj2RKW8rsz.l.Kam2J4Igp7C.wMagYyTEklNXRHNjO', 'Le Van Nam', 'nam@gmail.com', '0900000005', 'Hai Phong', 'KhachHang');
+('admin', '$2a$10$Dpg/C6khLzJNFiGh.Y8IZ.KzFITP5e1ewMb4PCbYAr1Y5AuGNzdhC', 'Quan tri vien', 'admin@gmail.com', '0900000001', 'Hung Yen', 'Admin'),
+('nhanvien01', '$2a$10$Dpg/C6khLzJNFiGh.Y8IZ.KzFITP5e1ewMb4PCbYAr1Y5AuGNzdhC', 'Nguyen Van An', 'nhanvien@gmail.com', '0900000002', 'Hung Yen', 'NhanVien'),
+('huy2005', '$2a$10$Tbh39eZ98b9nBys59G32qOkyP8iEWMkKcrrwqinI6whTs.8kQoete', 'Nguyen Duc Huy', 'huy@gmail.com', '0900000003', 'Hung Yen', 'KhachHang'),
+('ngoc2004', '$2a$10$Tbh39eZ98b9nBys59G32qOkyP8iEWMkKcrrwqinI6whTs.8kQoete', 'Tran Thi Ngoc', 'ngoc@gmail.com', '0900000004', 'Ha Noi', 'KhachHang'),
+('nam2003', '$2a$10$Tbh39eZ98b9nBys59G32qOkyP8iEWMkKcrrwqinI6whTs.8kQoete', 'Le Van Nam', 'nam@gmail.com', '0900000005', 'Hai Phong', 'KhachHang');
 
 -- =========================================================
 -- DU LIEU MAU - NHAN VIEN

@@ -29,6 +29,28 @@ export interface CartItem {
   ten_san_pham?: string;
   gia_ban?: number;
   hinh_anh?: string | null;
+  ton_kho?: number;
+  trang_thai?: string;
+}
+
+export interface CheckoutQuote {
+  items: CartItem[];
+  tam_tinh: number;
+  phi_giao_hang: number;
+  tong_tien: number;
+  snapshot: string;
+  issues: string[];
+  can_checkout: boolean;
+}
+
+export interface CheckoutPayload {
+  ho_ten_nguoi_nhan: string;
+  so_dien_thoai: string;
+  dia_chi_giao_hang: string;
+  ghi_chu: string;
+  phuong_thuc_thanh_toan: 'ThanhToanKhiNhanHang';
+  snapshot: string;
+  request_id: string;
 }
 
 export interface Order {
@@ -40,5 +62,7 @@ export interface Order {
   tong_tien: number;
   phuong_thuc_thanh_toan: 'TienMat' | 'ChuyenKhoan' | 'ThanhToanKhiNhanHang';
   trang_thai: 'ChoXacNhan' | 'DaXacNhan' | 'DangGiao' | 'DaGiao' | 'DaHuy';
+  ghi_chu?: string | null;
+  ngay_dat?: string;
   items?: any[];
 }

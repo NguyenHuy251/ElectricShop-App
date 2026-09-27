@@ -1,22 +1,31 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LoadingState, ScreenHeading } from '@/components/shop-ui';
 import { authService } from '../../services/auth.service';
 import type { User } from '../../types';
-import { getInitials } from '../../utils/format';
+import { getApiMessage, getInitials } from '../../utils/format';
 
 export default function ProfileScreen() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({ ho_ten: '', email: '', so_dien_thoai: '', dia_chi: '' });
 
   const loadProfile = useCallback(async () => {
     try {
       const response = await authService.getMe();
       setUser(response.data);
+      setForm({
+        ho_ten: response.data.ho_ten || '',
+        email: response.data.email || '',
+        so_dien_thoai: response.data.so_dien_thoai || '',
+        dia_chi: response.data.dia_chi || '',
+      });
     } catch {
       setUser(null);
     } finally {
@@ -28,6 +37,29 @@ export default function ProfileScreen() {
     setLoading(true);
     loadProfile();
   }, [loadProfile]));
+
+  const updateField = (key: keyof typeof form, value: string) => {
+    setForm((current) => ({ ...current, [key]: value }));
+  };
+
+  const handleSave = async () => {
+    if (!form.ho_ten.trim() || !form.email.trim()) {
+      Alert.alert('Thiếu thông tin', 'Vui lòng nhập họ tên và email');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const response = await authService.updateMe(form);
+      setUser(response.data);
+      setEditing(false);
+      Alert.alert('Thành công', 'Thông tin tài khoản đã được cập nhật');
+    } catch (error) {
+      Alert.alert('Lỗi', getApiMessage(error, 'Không thể cập nhật thông tin tài khoản'));
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const handleLogout = async () => {
     await authService.logout();
@@ -41,6 +73,7 @@ export default function ProfileScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
+      <KeyboardAvoidingView style={styles.keyboard} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
         <ScreenHeading eyebrow="GÓC RIÊNG CỦA BẠN" title="Xin chào, bạn!" subtitle="Mọi thông tin mua sắm, trong tầm tay." icon="person-outline" />
 
@@ -53,10 +86,27 @@ export default function ProfileScreen() {
               <Text style={styles.meta}>{user.email}</Text>
               <Text style={styles.meta}>{user.so_dien_thoai || 'Chưa có số điện thoại'}</Text>
             </View>
+            <Pressable accessibilityLabel="Chỉnh sửa thông tin tài khoản" onPress={() => setEditing(true)} style={styles.editButton}>
+              <MaterialIcons name="edit" size={20} color="#183C35" />
+            </Pressable>
           </View>
         ) : (
           <View style={styles.card}><Text style={styles.muted}>Chưa có dữ liệu tài khoản</Text></View>
         )}
+
+        {editing ? (
+          <View style={styles.editForm}>
+            <Text style={styles.formTitle}>Cập nhật thông tin</Text>
+            <TextInput style={styles.input} value={form.ho_ten} onChangeText={(value) => updateField('ho_ten', value)} placeholder="Họ tên" placeholderTextColor="#84938B" />
+            <TextInput style={styles.input} value={form.email} onChangeText={(value) => updateField('email', value)} placeholder="Email" placeholderTextColor="#84938B" keyboardType="email-address" autoCapitalize="none" />
+            <TextInput style={styles.input} value={form.so_dien_thoai} onChangeText={(value) => updateField('so_dien_thoai', value)} placeholder="Số điện thoại" placeholderTextColor="#84938B" keyboardType="phone-pad" />
+            <TextInput style={[styles.input, styles.addressInput]} value={form.dia_chi} onChangeText={(value) => updateField('dia_chi', value)} placeholder="Địa chỉ giao hàng" placeholderTextColor="#84938B" multiline />
+            <View style={styles.formActions}>
+              <Pressable style={styles.cancelButton} onPress={() => setEditing(false)} disabled={saving}><Text style={styles.cancelText}>Hủy</Text></Pressable>
+              <Pressable style={[styles.saveButton, saving && styles.disabled]} onPress={handleSave} disabled={saving}><Text style={styles.saveText}>{saving ? 'Đang lưu...' : 'Lưu thay đổi'}</Text></Pressable>
+            </View>
+          </View>
+        ) : null}
 
 <Text style={styles.menuLabel}>MUA SẮM & GIAO NHẬN</Text>
         <View style={styles.menu}>
@@ -82,6 +132,7 @@ export default function ProfileScreen() {
           <Text style={styles.logoutText}>Đăng xuất</Text>
         </Pressable>
       </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -105,4 +156,16 @@ const styles = StyleSheet.create({
   menuText: { color: '#183C35', fontSize: 14, fontWeight: '700', flex: 1 },
   logout: { marginTop: 'auto', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E3E9E1', borderRadius: 16, padding: 17 },
   logoutText: { color: '#BC4545', fontWeight: '800' },
+  keyboard: { flex: 1 },
+  editButton: { width: 40, height: 40, borderRadius: 14, backgroundColor: '#DDF3A3', alignItems: 'center', justifyContent: 'center' },
+  editForm: { backgroundColor: '#fff', borderRadius: 22, padding: 16, marginTop: 14, borderWidth: 1, borderColor: '#EAF0E7' },
+  formTitle: { color: '#183C35', fontSize: 16, fontWeight: '800', marginBottom: 12 },
+  input: { minHeight: 46, borderWidth: 1, borderColor: '#E3E9E1', borderRadius: 14, paddingHorizontal: 12, color: '#183C35', marginBottom: 10, backgroundColor: '#fff' },
+  addressInput: { minHeight: 72, paddingTop: 12, textAlignVertical: 'top' },
+  formActions: { flexDirection: 'row', gap: 10, marginTop: 4 },
+  cancelButton: { flex: 1, minHeight: 46, borderRadius: 14, backgroundColor: '#EDF2E9', alignItems: 'center', justifyContent: 'center' },
+  cancelText: { color: '#183C35', fontWeight: '800' },
+  saveButton: { flex: 1, minHeight: 46, borderRadius: 14, backgroundColor: '#176B52', alignItems: 'center', justifyContent: 'center' },
+  saveText: { color: '#fff', fontWeight: '800' },
+  disabled: { opacity: 0.6 },
 });

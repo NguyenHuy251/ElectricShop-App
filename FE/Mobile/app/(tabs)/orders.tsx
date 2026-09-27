@@ -1,9 +1,10 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { FlatList, Pressable, ScrollView, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { EmptyState, LoadingState, ScreenHeading } from '@/components/shop-ui';
+import { CancelOrderButton } from '@/components/cancel-order-button';
 import { shop } from '@/constants/shop-theme';
 import { orderService } from '../../services/order.service';
 import type { Order } from '../../types';
@@ -18,6 +19,7 @@ const statusLabel: Record<string, string> = {
 };
 
 export default function OrdersScreen() {
+  const router = useRouter();
   const [filter, setFilter] = useState('all');
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
@@ -79,6 +81,13 @@ export default function OrdersScreen() {
                 <View style={styles.infoLine}><MaterialIcons name="location-on" size={17} color="#6D7D76" /><Text numberOfLines={1} style={styles.infoText}>{item.dia_chi_giao_hang}</Text></View>
                 <View style={styles.infoLine}><MaterialIcons name="inventory-2" size={17} color="#6D7D76" /><Text style={styles.infoText}>{item.items?.length || 0} sản phẩm</Text></View>
                 <View style={styles.totalRow}><Text style={styles.totalLabel}>Tổng thanh toán</Text><Text style={styles.total}>{formatCurrency(item.tong_tien)}</Text></View>
+                <Pressable style={styles.detailButton} onPress={() => router.push(`/order/${item.ma_don_hang}` as any)}>
+                  <Text style={styles.detailButtonText}>Xem chi tiết đơn hàng</Text>
+                  <MaterialIcons name="chevron-right" size={20} color="#176B52" />
+                </Pressable>
+                {item.trang_thai === 'ChoXacNhan' ? (
+                  <CancelOrderButton orderId={item.ma_don_hang} onCanceled={loadOrders} />
+                ) : null}
               </View>
             )}
           />
@@ -108,4 +117,8 @@ const styles = StyleSheet.create({
   infoLine: { flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: 7 },
   infoText: { color: '#6D7D76', flex: 1, fontSize: 13 },
   total: { color: '#183C35', fontSize: 18, fontWeight: '800' },
+  detailButton: { minHeight: 42, borderRadius: 12, backgroundColor: '#E7F1E9', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, marginTop: 16 },
+  detailButtonText: { color: '#176B52', fontSize: 13, fontWeight: '800' },
+  cancelButton: { minHeight: 42, borderRadius: 12, borderWidth: 1, borderColor: '#F0CACA', backgroundColor: '#FFF7F6', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, marginTop: 16 },
+  cancelButtonText: { color: '#BC4545', fontSize: 13, fontWeight: '800' },
 });
