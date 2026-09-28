@@ -24,8 +24,80 @@ export interface Brand {
   mo_ta?: string | null;
 }
 
+export type SpecDataType = 'TEXT' | 'NUMBER' | 'BOOLEAN' | 'OPTION';
+
+export interface SpecificationGroup {
+  ma_nhom_thong_so: number;
+  ten_nhom_thong_so: string;
+  thu_tu_hien_thi?: number;
+  trang_thai?: boolean;
+}
+
+export interface Specification {
+  ma_thong_so: number;
+  ma_nhom_thong_so: number;
+  ten_thong_so: string;
+  kieu_du_lieu: SpecDataType;
+  don_vi?: string | null;
+  cho_phep_loc?: boolean;
+  thu_tu_hien_thi?: number;
+  trang_thai?: boolean;
+  ten_nhom_thong_so?: string;
+}
+
+export interface CategorySpecification {
+  ma_danh_muc: number;
+  ma_thong_so: number;
+  ma_nhom_thong_so?: number;
+  ten_nhom_thong_so?: string;
+  ten_thong_so: string;
+  kieu_du_lieu: SpecDataType;
+  don_vi?: string | null;
+  cho_phep_loc?: boolean;
+  bat_buoc?: boolean;
+  thu_tu_hien_thi?: number;
+}
+
+export interface ProductSpecification {
+  ma_san_pham?: number;
+  ma_thong_so: number;
+  ten_thong_so?: string;
+  ten_nhom?: string;
+  kieu_du_lieu?: SpecDataType;
+  don_vi?: string | null;
+  gia_tri?: string | null;
+  gia_tri_so?: number | null;
+  gia_tri_bool?: boolean | null;
+  thu_tu_nhom?: number;
+  thu_tu_thong_so?: number;
+}
+
+export interface ProductImage {
+  ma_hinh_anh?: number;
+  ma_san_pham?: number;
+  duong_dan: string;
+  mo_ta?: string | null;
+  la_anh_chinh?: boolean;
+  thu_tu_hien_thi?: number;
+}
+
+export interface GroupedSpecificationItem {
+  ma_thong_so: number;
+  name: string;
+  value: string;
+  numeric_value?: number | null;
+  bool_value?: boolean | null;
+  unit?: string | null;
+  type?: SpecDataType;
+  order?: number;
+}
+
+export interface GroupedSpecification {
+  group: string;
+  items: GroupedSpecificationItem[];
+}
+
 export interface Product {
-  chi_tiet_san_pham?: ProductDetails | string | null;
   ma_san_pham: number;
   ma_danh_muc: number;
   ma_thuong_hieu: number;
@@ -41,6 +113,26 @@ export interface Product {
   ngay_tao?: string;
   ten_danh_muc?: string;
   ten_thuong_hieu?: string;
+  thong_so_ky_thuat?: ProductSpecification[];
+  danh_sach_hinh_anh?: ProductImage[];
+  specifications?: GroupedSpecification[];
+  images?: ProductImage[];
+}
+
+export interface ProductInput {
+  ma_san_pham_code: string;
+  ten_san_pham: string;
+  ma_danh_muc: number;
+  ma_thuong_hieu: number;
+  gia_nhap?: number;
+  gia_ban: number;
+  so_luong: number;
+  bao_hanh?: number;
+  hinh_anh?: string | null;
+  trang_thai: 'DangBan' | 'HetHang' | 'NgungBan';
+  mo_ta?: string | null;
+  thong_so?: { ma_thong_so: number; gia_tri?: string | null; gia_tri_so?: number | null; gia_tri_bool?: boolean | null }[];
+  danh_sach_hinh_anh?: { duong_dan: string; mo_ta?: string | null; la_anh_chinh?: boolean; thu_tu_hien_thi?: number }[];
 }
 
 export interface Order {
@@ -56,7 +148,7 @@ export interface Order {
   trang_thai: 'ChoXacNhan' | 'DaXacNhan' | 'DangGiao' | 'DaGiao' | 'DaHuy';
   ghi_chu?: string | null;
   ngay_dat?: string;
-  items?: Array<{ ma_don_hang: number; ma_san_pham: number; ten_san_pham: string; so_luong: number; don_gia: number | string; thanh_tien: number | string }>; 
+  items?: Array<{ ma_don_hang: number; ma_san_pham: number; ten_san_pham: string; so_luong: number; don_gia: number | string; thanh_tien: number | string }>;
 }
 
 export interface DashboardStatistics {
@@ -73,10 +165,6 @@ export interface DashboardStatistics {
   so_don_da_huy: number;
 }
 
-export interface ProductDetails {
-  cong_suat?: string; dung_tich?: string; kich_thuoc?: string; mau_sac?: string; xuat_xu?: string; thong_so_khac?: string;
-}
-export type ProductInput = Partial<Product> & ProductDetails;
 export interface Employee {
   ma_nhan_vien: number; ma_tai_khoan?: number | null; ho_ten: string; chuc_vu?: string;
   so_dien_thoai?: string; email?: string; ngay_vao_lam?: string; luong: number | string; trang_thai: 'DangLam' | 'NghiLam';

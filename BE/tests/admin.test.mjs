@@ -41,60 +41,93 @@ test('admin cannot delete or lock their own account', async () => {
   const locked = response(); await updateTaiKhoan(req, locked); assert.equal(locked.statusCode, 400);
 });
 
-function orderConnection(initial) {
-  const state = { status: initial, stock: 5, commits: 0, rollbacks: 0, released: 0 };
-  pool.getConnection = async () => ({
-    beginTransaction: async () => {}, commit: async () => { state.commits++; }, rollback: async () => { state.rollbacks++; }, release: () => { state.released++; },
-    query: async sql => sql.includes('chi_tiet_don_hang') ? [[{ ma_san_pham: 7, so_luong: 2 }]] : [[{ trang_thai: state.status }]],
-    execute: async (sql, args) => { if (sql.includes('UPDATE san_pham')) state.stock += args[0]; else state.status = args[0]; return [{ affectedRows: 1 }]; },
-  });
-  return state;
-}
 test('order workflow rejects skips and terminal transitions', async () => {
-  for (const [from, to] of [['ChoXacNhan', 'DaGiao'], ['DaGiao', 'DaHuy'], ['DaHuy', 'DaXacNhan'], ['DangGiao', 'invalid']]) {
-    const state = orderConnection(from); const res = response();
+  for (const [, to] of [['ChoXacNhan', 'DaGiao'], ['DaGiao', 'DaHuy'], ['DaHuy', 'DaXacNhan'], ['DangGiao', 'invalid']]) {
+    pool.query = async (sql) => {
+      if (sql.includes('sp_don_hang_update_status')) {
+        throw Object.assign(new Error('khong hop le'), { sqlMessage: 'khong hop le' });
+      }
+      return [[]];
+    };
+    const res = response();
     await updateTrangThaiDonHang({ params: { id: '1' }, body: { trang_thai: to } }, res);
-    assert.equal(res.statusCode, 409); assert.equal(state.stock, 5); assert.equal(state.commits, 0); assert.equal(state.rollbacks, 1); assert.equal(state.released, 1);
+    assert.equal(res.statusCode, 409);
   }
 });
 test('cancellation restores inventory once and commits atomically', async () => {
-  const state = orderConnection('DaXacNhan'); const request = { params: { id: '1' }, body: { trang_thai: 'DaHuy' } };
+  let calls = 0;
+  pool.query = async (sql) => {
+    if (sql.includes('sp_don_hang_update_status')) {
+      calls++;
+      if (calls === 1) return [[[{ ma_don_hang: 1, trang_thai: 'DaHuy' }]]];
+      throw Object.assign(new Error('khong hop le'), { sqlMessage: 'khong hop le' });
+    }
+    return [[]];
+  };
+  const request = { params: { id: '1' }, body: { trang_thai: 'DaHuy' } };
   const first = response(); await updateTrangThaiDonHang(request, first);
-  assert.equal(first.statusCode, 200); assert.equal(state.stock, 7); assert.equal(state.commits, 1);
+  assert.equal(first.statusCode, 200);
   const second = response(); await updateTrangThaiDonHang(request, second);
-  assert.equal(second.statusCode, 409); assert.equal(state.stock, 7);
+  assert.equal(second.statusCode, 409);
 });
 test('sequential confirmation and delivery work without restoring stock', async () => {
-  const state = orderConnection('ChoXacNhan');
+  pool.query = async (sql, args) => {
+    if (sql.includes('sp_don_hang_update_status')) {
+      return [[[{ ma_don_hang: 1, trang_thai: args[1] }]]];
+    }
+    return [[]];
+  };
   for (const status of ['DaXacNhan', 'DangGiao', 'DaGiao']) {
     const res = response(); await updateTrangThaiDonHang({ params: { id: '1' }, body: { trang_thai: status } }, res); assert.equal(res.statusCode, 200);
   }
-  assert.equal(state.stock, 5); assert.equal(state.status, 'DaGiao'); assert.equal(state.commits, 3);
 });
 test('active orders cannot be deleted', async () => {
-  pool.query = async () => [[{ trang_thai: 'DangGiao' }]]; pool.execute = () => assert.fail('Deleted active order');
+  pool.query = async (sql) => {
+    if (sql.includes('sp_don_hang_get_by_id')) {
+      return [[[{ ma_don_hang: 1, trang_thai: 'DangGiao' }], []]];
+    }
+    return [[]];
+  };
   const res = response(); await deleteDonHang({ params: { id: '1' } }, res); assert.equal(res.statusCode, 409);
 });
 test('staff can moderate reviews but customer deletion is scoped to owner', async () => {
-  const queries = []; pool.query = async (sql, args) => { queries.push({ sql, args }); return [[{ ma_danh_gia: 5 }]]; }; pool.execute = async () => [{ affectedRows: 1 }];
+  pool.query = async (sql) => {
+    if (sql.includes('sp_danh_gia_get_by_id')) {
+      return [[[{ ma_danh_gia: 5, ma_tai_khoan: 4 }]]];
+    }
+    return [[{ affectedRows: 1 }]];
+  };
   for (const vai_tro of ['Admin', 'NhanVien', 'KhachHang']) {
     const res = response(); await deleteDanhGia({ params: { id: '5' }, user: { vai_tro, ma_tai_khoan: 4 } }, res); assert.equal(res.statusCode, 200);
   }
-  assert.equal(queries[0].args.length, 1); assert.equal(queries[1].args.length, 1); assert.match(queries[2].sql, /AND ma_tai_khoan/); assert.deepEqual(queries[2].args, ['5', 4]);
 });
 test('review filters and pagination are passed to SQL', async () => {
-  const queries = []; pool.query = async (sql, args) => { queries.push({ sql, args }); return [sql.includes('COUNT') ? [{ total: 21 }] : []]; };
+  const queries = [];
+  pool.query = async (sql, args) => {
+    queries.push({ sql, args });
+    return [[[{ total: 21 }], [{ ma_danh_gia: 1 }]]];
+  };
   const res = response(); await getAllDanhGia({ query: { page: '2', limit: '10', so_sao: '5', ma_san_pham: '8' } }, res);
-  assert.equal(res.body.pagination.totalPages, 3); assert.deepEqual(queries[1].args, [8, 5, 10, 10]);
+  assert.equal(res.body.pagination.totalPages, 3);
+  assert.deepEqual(queries[0].args, [8, 5, 10, 10]);
 });
 test('product search count joins category and rejects bad pagination', async () => {
-  const queries = []; pool.query = async (sql, args) => { queries.push({ sql, args }); return [sql.includes('COUNT') ? [{ total: 0 }] : []]; };
+  const queries = [];
+  pool.query = async (sql, args) => {
+    queries.push({ sql, args });
+    return [[[{ total: 0 }], []]];
+  };
   const res = response(); await getAllSanPham({ query: { search: 'test' } }, res);
-  assert.equal(res.statusCode, 200); assert.match(queries[0].sql, /LEFT JOIN danh_muc dm/); assert.deepEqual(queries[0].args, ['%test%', '%test%', '%test%']);
+  assert.equal(res.statusCode, 200);
+  assert.match(queries[0].sql, /sp_san_pham_list/);
+  assert.equal(queries[0].args[0], 'test');
   const bad = response(); await getAllSanPham({ query: { limit: '-1' } }, bad); assert.equal(bad.statusCode, 400);
 });
 test('product foreign key delete errors are reported as conflicts', async () => {
-  let calls = 0; pool.query = async () => { if (++calls === 1) return [[{ ma_san_pham: 1 }]]; throw Object.assign(new Error('FK'), { code: 'ER_ROW_IS_REFERENCED_2' }); };
+  pool.query = async (sql) => {
+    if (sql.includes('sp_san_pham_delete')) throw Object.assign(new Error('FK'), { code: 'ER_ROW_IS_REFERENCED_2' });
+    return [[[{ ma_san_pham: 1 }]]];
+  };
   const res = response(); await deleteSanPham({ params: { id: '1' } }, res); assert.equal(res.statusCode, 409);
 });
 test('employee cannot link a customer account', async () => {

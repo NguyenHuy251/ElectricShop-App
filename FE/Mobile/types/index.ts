@@ -9,6 +9,36 @@ export interface User {
   trang_thai: 'HoatDong' | 'Khoa';
 }
 
+export interface ProductSpecification {
+  ma_thong_so: number;
+  ten_thong_so?: string;
+  ten_nhom?: string;
+  don_vi?: string | null;
+  gia_tri?: string | null;
+  gia_tri_so?: number | null;
+  gia_tri_bool?: boolean | null;
+}
+
+export interface ProductImage {
+  ma_hinh_anh?: number;
+  duong_dan: string;
+  mo_ta?: string | null;
+  la_anh_chinh?: boolean;
+  thu_tu_hien_thi?: number;
+}
+
+export interface GroupedSpecificationItem {
+  ma_thong_so: number;
+  name: string;
+  value: string;
+  unit?: string | null;
+}
+
+export interface GroupedSpecification {
+  group: string;
+  items: GroupedSpecificationItem[];
+}
+
 export interface Product {
   ma_san_pham: number;
   ma_danh_muc: number;
@@ -21,6 +51,10 @@ export interface Product {
   hinh_anh?: string | null;
   ten_danh_muc?: string;
   ten_thuong_hieu?: string;
+  thong_so_ky_thuat?: ProductSpecification[];
+  danh_sach_hinh_anh?: ProductImage[];
+  specifications?: GroupedSpecification[];
+  images?: ProductImage[];
 }
 
 export interface CartItem {
