@@ -3,6 +3,7 @@ import { useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { CancelOrderButton } from '@/components/cancel-order-button';
+import { OrderProductReview } from '@/components/order-product-review';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { EmptyState, LoadingState } from '@/components/shop-ui';
 import { orderService } from '../../services/order.service';
@@ -54,7 +55,7 @@ export default function OrderDetailScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         <View style={styles.header}>
           <View>
             <Text style={styles.eyebrow}>CHI TIẾT ĐƠN HÀNG</Text>
@@ -69,13 +70,16 @@ export default function OrderDetailScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Sản phẩm đã đặt</Text>
           {(order.items || []).map((item: any) => (
-            <View style={styles.item} key={item.ma_san_pham}>
+            <View key={item.ma_san_pham}>
+            <View style={styles.item}>
               <View style={styles.itemIcon}><MaterialIcons name="inventory-2" size={20} color="#176B52" /></View>
               <View style={styles.itemInfo}>
                 <Text style={styles.itemName}>{item.ten_san_pham}</Text>
                 <Text style={styles.itemMeta}>{item.so_luong} x {formatCurrency(item.don_gia)}</Text>
               </View>
               <Text style={styles.itemTotal}>{formatCurrency(item.thanh_tien || Number(item.don_gia) * Number(item.so_luong))}</Text>
+            </View>
+            {order.trang_thai !== 'DaHuy' ? <OrderProductReview orderId={order.ma_don_hang} productId={item.ma_san_pham} review={order.reviews?.find(review => review.ma_san_pham === item.ma_san_pham)} /> : null}
             </View>
           ))}
           <View style={styles.totalRow}><Text style={styles.totalLabel}>Tổng thanh toán</Text><Text style={styles.total}>{formatCurrency(order.tong_tien)}</Text></View>

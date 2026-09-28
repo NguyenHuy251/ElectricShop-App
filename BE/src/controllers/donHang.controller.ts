@@ -49,6 +49,9 @@ export async function getDonHangById(req: AuthRequest, res: Response) {
     const [items] = await pool.query('SELECT * FROM chi_tiet_don_hang WHERE ma_don_hang = ?', [id]);
     order.items = items;
 
+    const [reviews] = await pool.query('SELECT ma_danh_gia, ma_san_pham, so_sao, noi_dung FROM danh_gia WHERE ma_tai_khoan = ?', [order.ma_tai_khoan]);
+    order.reviews = reviews;
+
     return sendSuccess(res, 'Chi tiết đơn hàng', order);
   } catch (error) {
     return sendError(res, 500, 'Lỗi khi lấy chi tiết đơn hàng', [(error as Error).message]);

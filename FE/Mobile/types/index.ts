@@ -35,6 +35,7 @@ export interface Product {
 
 export interface ProductReview {
   ma_danh_gia: number;
+  ma_san_pham: number;
   ho_ten: string;
   so_sao: number;
   noi_dung?: string | null;
@@ -89,4 +90,5 @@ export interface Order {
   ghi_chu?: string | null;
   ngay_dat?: string;
   items?: any[];
+  reviews?: ProductReview[];
 }
