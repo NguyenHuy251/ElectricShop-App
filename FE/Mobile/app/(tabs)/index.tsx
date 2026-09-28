@@ -8,6 +8,7 @@ import { productService } from '../../services/product.service';
 import type { Product } from '../../types';
 import { EmptyState, LoadingState, ProductCard } from '@/components/shop-ui';
 import { shop } from '@/constants/shop-theme';
+import { getApiMessage } from '@/utils/format';
 
 const fallbackCategories = [
   { label: 'Nhà bếp', icon: 'kitchen' as const, color: '#EAF5FF' },
@@ -20,15 +21,15 @@ export default function HomeScreen() {
   const [products, setProducts] = useState<Product[]>([]);
   const [cartCount, setCartCount] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
+  const [error, setError] = useState('');
 
   const loadHome = useCallback(async () => {
-    setError(false);
+    setError('');
     try {
       const response = await productService.getProducts({ limit: 4 });
       setProducts(response.data || []);
-    } catch {
-      setError(true);
+    } catch (error) {
+      setError(getApiMessage(error, 'Không thể tải danh sách sản phẩm'));
     } finally {
       setLoading(false);
     }
@@ -93,7 +94,7 @@ export default function HomeScreen() {
         </ScrollView>
 
         <SectionHeader title="Sản phẩm nổi bật" action="Xem thêm" href="/products" />
-        {loading ? <LoadingState message="Đang chọn sản phẩm cho bạn..." /> : error ? <EmptyState icon="wifi-off" title="Chưa tải được sản phẩm" message="Kiểm tra kết nối và thử lại nhé." action="Thử lại" onAction={loadHome} /> : !products.length ? <EmptyState icon="inventory-2" title="Sản phẩm đang được cập nhật" /> : (
+        {loading ? <LoadingState message="Đang chọn sản phẩm cho bạn..." /> : error ? <EmptyState icon="wifi-off" title="Chưa tải được sản phẩm" message={error} action="Thử lại" onAction={loadHome} /> : !products.length ? <EmptyState icon="inventory-2" title="Sản phẩm đang được cập nhật" /> : (
           <View style={styles.productRow}>{products.map(product => <View key={product.ma_san_pham} style={styles.productCell}><ProductCard product={product} /></View>)}</View>
         )}
         <Link href="/products" asChild><Pressable style={styles.bottomBanner}><View style={{ flex: 1 }}><Text style={styles.bottomTitle}>Tìm món đồ hợp với nhà bạn</Text><Text style={styles.bottomText}>Khám phá tất cả sản phẩm</Text></View><MaterialIcons name="arrow-circle-right" size={30} color={shop.primary} /></Pressable></Link>

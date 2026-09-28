@@ -1,7 +1,9 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { CancelOrderButton } from '@/components/cancel-order-button';
+import { OrderProductReview } from '@/components/order-product-review';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { EmptyState, LoadingState } from '@/components/shop-ui';
 import { orderService } from '../../services/order.service';
@@ -26,6 +28,7 @@ export default function OrderDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     const loadOrder = async () => {
@@ -33,7 +36,7 @@ export default function OrderDetailScreen() {
         const response = await orderService.getOrderById(Number(id));
         setOrder(response.data);
       } catch (error) {
-        Alert.alert('Lỗi', getApiMessage(error, 'Không thể tải chi tiết đơn hàng'));
+        setError(getApiMessage(error, 'Không thể tải chi tiết đơn hàng'));
       } finally {
         setLoading(false);
       }
@@ -47,12 +50,12 @@ export default function OrderDetailScreen() {
   }
 
   if (!order) {
-    return <SafeAreaView style={styles.safe}><EmptyState icon="receipt-long" title="Không tìm thấy đơn hàng" /></SafeAreaView>;
+    return <SafeAreaView style={styles.safe}><EmptyState icon="receipt-long" title="Không tìm thấy đơn hàng" message={error} /></SafeAreaView>;
   }
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         <View style={styles.header}>
           <View>
             <Text style={styles.eyebrow}>CHI TIẾT ĐƠN HÀNG</Text>
@@ -67,13 +70,16 @@ export default function OrderDetailScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Sản phẩm đã đặt</Text>
           {(order.items || []).map((item: any) => (
-            <View style={styles.item} key={item.ma_san_pham}>
+            <View key={item.ma_san_pham}>
+            <View style={styles.item}>
               <View style={styles.itemIcon}><MaterialIcons name="inventory-2" size={20} color="#176B52" /></View>
               <View style={styles.itemInfo}>
                 <Text style={styles.itemName}>{item.ten_san_pham}</Text>
                 <Text style={styles.itemMeta}>{item.so_luong} x {formatCurrency(item.don_gia)}</Text>
               </View>
               <Text style={styles.itemTotal}>{formatCurrency(item.thanh_tien || Number(item.don_gia) * Number(item.so_luong))}</Text>
+            </View>
+            {order.trang_thai !== 'DaHuy' ? <OrderProductReview orderId={order.ma_don_hang} productId={item.ma_san_pham} review={order.reviews?.find(review => review.ma_san_pham === item.ma_san_pham)} /> : null}
             </View>
           ))}
           <View style={styles.totalRow}><Text style={styles.totalLabel}>Tổng thanh toán</Text><Text style={styles.total}>{formatCurrency(order.tong_tien)}</Text></View>
@@ -86,7 +92,9 @@ export default function OrderDetailScreen() {
           <InfoRow icon="location-on" label="Địa chỉ" value={order.dia_chi_giao_hang} />
           <InfoRow icon="payments" label="Thanh toán" value={paymentLabel[order.phuong_thuc_thanh_toan] || order.phuong_thuc_thanh_toan} />
           {order.ghi_chu ? <InfoRow icon="notes" label="Ghi chú" value={order.ghi_chu} /> : null}
+          {order.phuong_thuc_thanh_toan === 'ThanhToanKhiNhanHang' && order.trang_thai !== 'DaHuy' && order.trang_thai !== 'DaGiao' ? <Text style={styles.date}>Thanh toán cho nhân viên giao hàng khi nhận đơn.</Text> : null}
         </View>
+        {order.trang_thai === 'ChoXacNhan' ? <CancelOrderButton orderId={order.ma_don_hang} onCanceled={() => setOrder({ ...order, trang_thai: 'DaHuy' })} /> : null}
       </ScrollView>
     </SafeAreaView>
   );

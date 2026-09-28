@@ -9,6 +9,9 @@ export function formatDate(value?: string | Date | null) {
 }
 
 export function getApiMessage(error: any, fallback: string) {
+  if (error?.response?.status === 401 && !['/auth/login', '/auth/register'].includes(error.config?.url)) return 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.';
+  if (error?.code === 'ECONNABORTED') return 'Kết nối máy chủ quá thời gian chờ. Vui lòng thử lại.';
+  if (error?.isAxiosError && !error.response) return 'Không kết nối được máy chủ. Vui lòng kiểm tra kết nối mạng hoặc thử lại sau.';
   return error?.response?.data?.message || error?.response?.data?.errors?.[0] || fallback;
 }
 

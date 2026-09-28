@@ -4,6 +4,7 @@ import { useCallback, useState } from 'react';
 import { Alert, FlatList, Pressable, ScrollView, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { EmptyState, LoadingState, ScreenHeading } from '@/components/shop-ui';
+import { CancelOrderButton } from '@/components/cancel-order-button';
 import { shop } from '@/constants/shop-theme';
 import { orderService } from '../../services/order.service';
 import type { Order } from '../../types';
@@ -104,10 +105,7 @@ export default function OrdersScreen() {
                   <MaterialIcons name="chevron-right" size={20} color="#176B52" />
                 </Pressable>
                 {item.trang_thai === 'ChoXacNhan' ? (
-                  <Pressable style={styles.cancelButton} onPress={() => handleCancel(item.ma_don_hang)}>
-                    <MaterialIcons name="cancel" size={18} color="#BC4545" />
-                    <Text style={styles.cancelButtonText}>Huỷ đơn hàng</Text>
-                  </Pressable>
+                  <CancelOrderButton orderId={item.ma_don_hang} onCanceled={loadOrders} />
                 ) : null}
               </View>
             )}

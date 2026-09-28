@@ -1,7 +1,12 @@
 import api from './api';
+import type { CheckoutPayload, CheckoutQuote, CheckoutSelection } from '../types';
 
 export const orderService = {
-  createOrder: async (payload: Record<string, any>) => {
+  getCheckout: async (selection: CheckoutSelection = {}): Promise<{ data: CheckoutQuote }> => {
+    const response = await api.get('/don-hang/checkout', { params: selection });
+    return response.data;
+  },
+  createOrder: async (payload: CheckoutPayload) => {
     const response = await api.post('/don-hang', payload);
     return response.data;
   },
