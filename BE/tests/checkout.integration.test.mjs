@@ -27,6 +27,43 @@ test('checkout transactions against an isolated MySQL database', { skip: process
     const payload = async (id = 1, key = 'checkout_integration_123456') => ({ ho_ten_nguoi_nhan: 'Test Customer', so_dien_thoai: '0912345678', dia_chi_giao_hang: '12 Nguyen Trai, Ha Noi', ghi_chu: 'Test', phuong_thuc_thanh_toan: 'ThanhToanKhiNhanHang', request_id: key, snapshot: (await invoke(previewCheckout, { user: user(id) })).body.data.snapshot });
     const count = async table => Number((await admin.query(`SELECT COUNT(*) AS n FROM ${table}`))[0][0].n);
     const stock = async () => Number((await admin.query('SELECT so_luong FROM san_pham WHERE ma_san_pham = 1'))[0][0].so_luong);
+    const direct = async (id = 1, quantity = 1) => {
+      const selection = { source: 'buy_now', ma_san_pham: 1, so_luong: quantity };
+      const quote = await invoke(previewCheckout, { user: user(id), query: selection });
+      return { ...await payload(id), ...selection, snapshot: quote.body.data.snapshot };
+    };
+
+    await t.test('buy-now purchases only the chosen quantity and preserves the existing cart', async () => {
+      await reset(); const body = await direct(1, 3);
+      const [before] = await admin.query('SELECT * FROM chi_tiet_gio_hang');
+      const results = await Promise.all([1, 2].map(() => invoke(createDonHang, { user: user(1), body })));
+      assert.deepEqual(results.map(r => r.statusCode), [200, 200]);
+      assert.equal(results[0].body.data.ma_don_hang, results[1].body.data.ma_don_hang);
+      assert.equal(results[0].body.data.tong_tien, 300000);
+      assert.equal(await stock(), 7); assert.equal(await count('don_hang'), 1);
+      const [after] = await admin.query('SELECT * FROM chi_tiet_gio_hang'); assert.deepEqual(after, before);
+      assert.equal((await invoke(createDonHang, { user: user(1), body: { ...body, source: 'cart', ma_san_pham: undefined, so_luong: undefined } })).statusCode, 409);
+    });
+    await t.test('buy-now works without a cart, rejects stale prices, unavailable products and deleted products', async () => {
+      await reset(); await admin.query('DELETE FROM gio_hang WHERE ma_tai_khoan = 2');
+      const body = await direct(2, 1);
+      assert.equal((await invoke(createDonHang, { user: user(2), body })).statusCode, 200);
+      assert.equal(await count('gio_hang'), 1);
+      await admin.query('INSERT INTO gio_hang (ma_gio_hang, ma_tai_khoan) VALUES (2, 2)');
+      for (const sql of ["UPDATE san_pham SET gia_ban = 120000", "UPDATE san_pham SET trang_thai = 'NgungBan'", 'UPDATE san_pham SET so_luong = 0']) {
+        await reset(); const attempt = await direct(); await admin.query(sql);
+        assert.equal((await invoke(createDonHang, { user: user(1), body: attempt })).statusCode, 409);
+        assert.equal(await count('don_hang'), 0); assert.equal(await count('chi_tiet_gio_hang'), 1);
+      }
+      assert.equal((await invoke(previewCheckout, { user: user(1), query: { source: 'buy_now', ma_san_pham: 99999, so_luong: 1 } })).statusCode, 404);
+    });
+    await t.test('buy-now and cart checkout compete safely for the last stock', async () => {
+      await reset(); await admin.query('UPDATE san_pham SET so_luong = 2');
+      const directBody = await direct(2, 2), cartBody = await payload(1);
+      const results = await Promise.all([invoke(createDonHang, { user: user(2), body: directBody }), invoke(createDonHang, { user: user(1), body: cartBody })]);
+      assert.deepEqual(results.map(r => r.statusCode).sort(), [200, 409]);
+      assert.equal(await stock(), 0); assert.equal(await count('don_hang'), 1);
+    });
 
     await t.test('successful COD stores generated totals, clears cart, ignores client total', async () => {
       await reset();

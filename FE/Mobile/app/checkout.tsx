@@ -1,13 +1,13 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useRouter } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { EmptyState, LoadingState, ProductImage } from '@/components/shop-ui';
 import { authService } from '@/services/auth.service';
 import { orderService } from '@/services/order.service';
-import type { CheckoutPayload, CheckoutQuote } from '@/types';
+import type { CheckoutPayload, CheckoutQuote, CheckoutSelection } from '@/types';
 import { formatCurrency, getApiMessage } from '@/utils/format';
 
 type Form = Pick<CheckoutPayload, 'ho_ten_nguoi_nhan' | 'so_dien_thoai' | 'dia_chi_giao_hang' | 'ghi_chu'>;
@@ -15,7 +15,18 @@ type Attempt = { payload: CheckoutPayload; quote: CheckoutQuote };
 const blank: Form = { ho_ten_nguoi_nhan: '', so_dien_thoai: '', dia_chi_giao_hang: '', ghi_chu: '' };
 
 export default function CheckoutScreen() {
+  const { source, productId, quantity } = useLocalSearchParams<{ source?: string; productId?: string; quantity?: string }>();
   const router = useRouter();
+  if (source !== undefined && (source !== 'buy_now' || !/^\d+$/.test(productId || '') || !/^\d+$/.test(quantity || '') || Number(productId) < 1 || Number(quantity) < 1 || Number(quantity) > 999)) {
+    return <EmptyState icon="error-outline" title="Thông tin mua hàng không hợp lệ" action="Chọn sản phẩm" onAction={() => router.replace('/products')} />;
+  }
+  return <CheckoutContent key={`${source || 'cart'}:${productId}:${quantity}`} initialSelection={source === 'buy_now' ? { source, ma_san_pham: Number(productId), so_luong: Number(quantity) } : {}} />;
+}
+
+function CheckoutContent({ initialSelection }: { initialSelection: CheckoutSelection }) {
+  const router = useRouter();
+  const [selection, setSelection] = useState(initialSelection);
+  const activeSelection = useRef(initialSelection);
   const [form, setForm] = useState<Form>(blank);
   const [quote, setQuote] = useState<CheckoutQuote | null>(null);
   const [loading, setLoading] = useState(true);
@@ -29,12 +40,14 @@ export default function CheckoutScreen() {
   const storageKey = useRef('');
   const busy = useRef(false);
 
-  const load = () => authService.getMe().then(async ({ data: user }) => {
+  const load = useCallback(() => authService.getMe().then(async ({ data: user }) => {
       setError('');
       storageKey.current = `checkout:pending:${user.ma_tai_khoan}`;
       const saved = await AsyncStorage.getItem(storageKey.current);
       if (saved) {
         const attempt: Attempt = JSON.parse(saved);
+        activeSelection.current = attempt.payload.source === 'buy_now' ? { source: 'buy_now', ma_san_pham: attempt.payload.ma_san_pham, so_luong: attempt.payload.so_luong } : {};
+        setSelection(activeSelection.current);
         pending.current = attempt;
         setForm(attempt.payload);
         setQuote(attempt.quote);
@@ -42,14 +55,14 @@ export default function CheckoutScreen() {
         setConfirmed(true);
         setUncertain(true);
       } else {
-        const { data } = await orderService.getCheckout();
+        const { data } = await orderService.getCheckout(activeSelection.current);
         setQuote(data);
         setForm(current => ({ ...current, ho_ten_nguoi_nhan: current.ho_ten_nguoi_nhan || user.ho_ten || '', so_dien_thoai: current.so_dien_thoai || user.so_dien_thoai || '', dia_chi_giao_hang: current.dia_chi_giao_hang || user.dia_chi || '' }));
       }
     }).catch(err => setError(getApiMessage(err, 'Không thể tải thông tin thanh toán.')))
-      .finally(() => setLoading(false));
+      .finally(() => setLoading(false)), []);
 
-  useEffect(() => { void load(); }, []);
+  useEffect(() => { void load(); }, [load]);
 
   const change = (key: keyof Form, value: string) => {
     setForm(current => ({ ...current, [key]: value }));
@@ -78,7 +91,7 @@ export default function CheckoutScreen() {
     setError('');
     try {
       const attempt = pending.current || {
-        payload: { ...form, phuong_thuc_thanh_toan: 'ThanhToanKhiNhanHang' as const, snapshot: quote.snapshot, request_id: `checkout_${Date.now()}_${Math.random().toString(36).slice(2)}_${Math.random().toString(36).slice(2)}` }, quote,
+        payload: { ...form, ...selection, phuong_thuc_thanh_toan: 'ThanhToanKhiNhanHang' as const, snapshot: quote.snapshot, request_id: `checkout_${Date.now()}_${Math.random().toString(36).slice(2)}_${Math.random().toString(36).slice(2)}` }, quote,
       };
       // Persist before sending. Retry the same request after refresh or an unknown network outcome.
       await AsyncStorage.setItem(storageKey.current, JSON.stringify(attempt));
@@ -96,7 +109,7 @@ export default function CheckoutScreen() {
         setReview(false);
         setConfirmed(false);
         setFieldErrors(err.response.data?.fieldErrors || {});
-        try { setQuote((await orderService.getCheckout()).data); }
+        try { setQuote((await orderService.getCheckout(selection)).data); }
         catch { setQuote(null); }
       } else { setUncertain(Boolean(pending.current)); }
     } finally { busy.current = false; setSubmitting(false); }
@@ -118,6 +131,7 @@ export default function CheckoutScreen() {
         <Text style={styles.eyebrow}>HOÀN TẤT ĐƠN HÀNG</Text>
         <Text style={styles.title}>{review ? 'Kiểm tra lần cuối' : 'Giao đến người bạn thương'}</Text>
         <Text style={styles.muted}>1. Thông tin nhận hàng  ·  2. Xác nhận đặt hàng</Text>
+        {selection.source === 'buy_now' ? <View style={styles.notice}><Text style={styles.label}>Thanh toán ngay sản phẩm đã chọn</Text><Text style={styles.muted}>Đơn này chỉ gồm sản phẩm bên dưới. Các sản phẩm trong giỏ hàng của bạn vẫn được giữ nguyên.</Text></View> : null}
         {error ? <View accessibilityRole="alert" style={styles.errorBox}><Text style={styles.errorText}>{error}</Text></View> : null}
         {uncertain ? <View style={styles.notice}><Text style={styles.label}>Đang chờ xác nhận kết quả</Text><Text style={styles.muted}>Thông tin đã gửi được giữ nguyên. Bấm “Kiểm tra lại đơn” để nhận kết quả, tránh tạo thêm đơn hàng.</Text><Pressable onPress={() => router.push('/orders')}><Text style={styles.link}>Xem danh sách đơn hàng</Text></Pressable></View> : null}
         <View style={styles.card}>
@@ -131,14 +145,14 @@ export default function CheckoutScreen() {
           </>}
         </View>
         <View style={styles.card}>
-          <View style={styles.row}><Text style={styles.sectionTitle}>Sản phẩm trong đơn</Text>{!uncertain && !submitting ? <Pressable onPress={() => router.replace('/cart')}><Text style={styles.link}>Sửa giỏ hàng</Text></Pressable> : null}</View>
+          <View style={styles.row}><Text style={styles.sectionTitle}>Sản phẩm trong đơn</Text>{!uncertain && !submitting ? <Pressable accessibilityRole="button" onPress={() => selection.source === 'buy_now' ? router.replace({ pathname: '/product/[id]', params: { id: String(selection.ma_san_pham), quantity: String(selection.so_luong) } }) : router.replace('/cart')}><Text style={styles.link}>{selection.source === 'buy_now' ? 'Đổi số lượng' : 'Sửa giỏ hàng'}</Text></Pressable> : null}</View>
           {quote.items.map(item => <View key={item.ma_san_pham} style={styles.product}>
             <ProductImage uri={item.hinh_anh} style={styles.image} />
             <View style={{ flex: 1 }}><Text style={styles.name}>{item.ten_san_pham}</Text><Text style={styles.muted}>{item.so_luong} × {formatCurrency(item.gia_ban)}</Text></View>
             <Text style={styles.amount}>{formatCurrency(Number(item.gia_ban) * item.so_luong)}</Text>
           </View>)}
           {quote.issues.map((issue, index) => <Text key={index} style={styles.errorText}>{issue}</Text>)}
-          {!quote.can_checkout ? <Text style={styles.errorText}>Vui lòng cập nhật giỏ hàng trước khi tiếp tục.</Text> : null}
+          {!quote.can_checkout ? <Text style={styles.errorText}>Vui lòng kiểm tra sản phẩm và số lượng trước khi tiếp tục.</Text> : null}
         </View>
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Giao hàng & thanh toán</Text>

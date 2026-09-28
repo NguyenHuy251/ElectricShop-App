@@ -1,9 +1,9 @@
 import api from './api';
-import type { CheckoutPayload, CheckoutQuote } from '../types';
+import type { CheckoutPayload, CheckoutQuote, CheckoutSelection } from '../types';
 
 export const orderService = {
-  getCheckout: async (): Promise<{ data: CheckoutQuote }> => {
-    const response = await api.get('/don-hang/checkout');
+  getCheckout: async (selection: CheckoutSelection = {}): Promise<{ data: CheckoutQuote }> => {
+    const response = await api.get('/don-hang/checkout', { params: selection });
     return response.data;
   },
   createOrder: async (payload: CheckoutPayload) => {

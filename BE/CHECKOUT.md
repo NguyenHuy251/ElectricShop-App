@@ -19,7 +19,19 @@ Trong `FE/Mobile`, cấu hình `EXPO_PUBLIC_API_URL` trỏ về BE rồi chạy 
 
 COD chỉ là phương thức trả tiền khi nhận hàng. Không hiển thị “đã thanh toán” khi tạo đơn. Hệ thống hiện chưa có sổ đối soát tiền COD độc lập; trạng thái giao hàng không thay thế chứng từ thu tiền.
 
-## API tạo đơn
+## Chi tiết sản phẩm và thanh toán ngay
+
+Trang `/product/:id` hiển thị thông tin sản phẩm, ảnh phóng to, thương hiệu, mã hàng, bảo hành, mô tả, thông số kỹ thuật, đánh giá hiện có và sản phẩm cùng danh mục. Các thông tin chưa có dữ liệu được ghi rõ là đang cập nhật. Hai nút mua hàng nằm cạnh nhau; sản phẩm ngừng bán/hết hàng và số lượng không hợp lệ không thể mua.
+
+- **Thêm vào giỏ hàng** cộng số lượng chọn vào giỏ; BE kiểm tra cả số lượng đã có và tồn kho hiện tại.
+- **Thanh toán ngay** mở `/checkout?source=buy_now&productId=...&quantity=...`, chỉ đặt sản phẩm và số lượng vừa chọn. Không thêm vào giỏ, không gộp hoặc xóa những món đã lưu trong giỏ.
+- Khách có thể quay lại sửa số lượng trước khi xác nhận. Đơn vẫn trải qua nhập thông tin nhận hàng, kiểm tra tổng tiền và xác nhận COD.
+- Lấy báo giá trực tiếp bằng `GET /api/don-hang/checkout?source=buy_now&ma_san_pham=...&so_luong=...`. Khi tạo đơn, bổ sung `source: "buy_now"`, `ma_san_pham` và `so_luong` dạng số vào body. Khi không có `source`, API dùng giỏ hàng như trước.
+- Mua ngay dùng cùng cơ chế chốt giá, khóa tồn kho, rollback và chống gửi trùng. Không cần tồn tại giỏ hàng. Khi khôi phục yêu cầu chưa rõ kết quả, FE giữ đúng sản phẩm, số lượng và phương thức của yêu cầu đã gửi, kể cả khi khách quay lại từ đường dẫn thanh toán giỏ hàng.
+
+Không có thay đổi schema mới cho tính năng mua ngay; sử dụng bảng `checkout_requests` từ migration trước.
+
+## Dữ liệu gửi khi tạo đơn
 
 `POST /api/don-hang`, cần Bearer token. Body gồm `ho_ten_nguoi_nhan`, `so_dien_thoai`, `dia_chi_giao_hang`, `ghi_chu`, `phuong_thuc_thanh_toan: "ThanhToanKhiNhanHang"`, `snapshot` lấy từ báo giá và `request_id` mới cho mỗi lần xác nhận. Khi chưa biết kết quả, phải gửi lại nguyên body và cùng `request_id`. Tổng tiền do server tính, không nhận từ client.
 

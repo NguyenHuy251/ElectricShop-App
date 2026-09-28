@@ -4,6 +4,18 @@ export class CheckoutError extends Error {
   constructor(public status: number, message: string, public fieldErrors?: Record<string, string>) { super(message); }
 }
 
+export function checkoutSelection(value: Record<string, unknown>, query = false) {
+  if (value.source === undefined || value.source === 'cart') {
+    if (value.ma_san_pham !== undefined || value.so_luong !== undefined) throw new CheckoutError(400, 'Nguồn thanh toán không hợp lệ.');
+    return {};
+  }
+  if (value.source !== 'buy_now') throw new CheckoutError(400, 'Nguồn thanh toán không hợp lệ.');
+  const integer = (v: unknown) => typeof v === 'number' ? v : query && typeof v === 'string' && /^\d+$/.test(v) ? Number(v) : NaN;
+  const productId = integer(value.ma_san_pham), quantity = integer(value.so_luong);
+  if (!Number.isSafeInteger(productId) || productId < 1 || !Number.isInteger(quantity) || quantity < 1 || quantity > 999) throw new CheckoutError(400, 'Chọn sản phẩm và số lượng nguyên từ 1 đến 999.');
+  return { source: 'buy_now' as const, ma_san_pham: productId, so_luong: quantity };
+}
+
 export interface CheckoutItem {
   ma_san_pham: number;
   ten_san_pham: string;
@@ -48,5 +60,5 @@ export function validateCheckout(body: Record<string, unknown>) {
   const requestId = text('request_id');
   const snapshot = text('snapshot');
   if (!/^[a-zA-Z0-9_-]{16,100}$/.test(requestId) || !/^[a-f0-9]{64}$/.test(snapshot)) throw new CheckoutError(400, 'Vui lòng tải lại trang thanh toán trước khi đặt hàng.');
-  return { ho_ten_nguoi_nhan: name, so_dien_thoai: phone, dia_chi_giao_hang: address, ghi_chu: note, phuong_thuc_thanh_toan: 'ThanhToanKhiNhanHang', request_id: requestId, snapshot };
+  return { ho_ten_nguoi_nhan: name, so_dien_thoai: phone, dia_chi_giao_hang: address, ghi_chu: note, phuong_thuc_thanh_toan: 'ThanhToanKhiNhanHang', request_id: requestId, snapshot, ...checkoutSelection(body) };
 }
