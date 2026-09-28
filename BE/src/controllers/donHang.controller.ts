@@ -1,27 +1,10 @@
+import { pool } from '../config/database.js';
 import { Request, Response } from 'express';
 import { AuthRequest } from '../middleware/auth.middleware.js';
 import { sendError, sendSuccess } from '../utils/response.js';
 import * as donHangService from '../services/donHang.service.js';
 
-export async function createDonHang(req: AuthRequest, res: Response) {
-  try {
-    if (!req.user) return sendError(res, 401, 'Bạn chưa đăng nhập');
-
-    const { ho_ten_nguoi_nhan, so_dien_thoai, dia_chi_giao_hang, phuong_thuc_thanh_toan, ghi_chu } = req.body;
-    if (!ho_ten_nguoi_nhan || !so_dien_thoai || !dia_chi_giao_hang) {
-      return sendError(res, 400, 'Thiếu thông tin đặt hàng');
-    }
-
-    const result = await donHangService.createDonHang([
-      req.user.ma_tai_khoan, ho_ten_nguoi_nhan, so_dien_thoai, dia_chi_giao_hang,
-      phuong_thuc_thanh_toan || 'ThanhToanKhiNhanHang', ghi_chu || null,
-    ]);
-    const order = result[0];
-    return sendSuccess(res, 'Đặt hàng thành công', order);
-  } catch (error) {
-    return sendError(res, 500, 'Lỗi khi tạo đơn hàng', [(error as Error).message]);
-  }
-}
+export { createDonHang } from './checkout.controller.js';
 
 export async function getDonHang(req: AuthRequest, res: Response) {
   try {
@@ -52,6 +35,9 @@ export async function getDonHangById(req: AuthRequest, res: Response) {
 
     order.items = data.items;
 
+    const [reviews] = await pool.query('SELECT ma_danh_gia, ma_san_pham, so_sao, noi_dung FROM danh_gia WHERE ma_tai_khoan = ?', [order.ma_tai_khoan]);
+    order.reviews = reviews;
+
     return sendSuccess(res, 'Chi tiết đơn hàng', order);
   } catch (error) {
     return sendError(res, 500, 'Lỗi khi lấy chi tiết đơn hàng', [(error as Error).message]);
@@ -76,8 +62,52 @@ export async function cancelDonHang(req: AuthRequest, res: Response) {
     if (!req.user) return sendError(res, 401, 'Bạn chưa đăng nhập');
 
     const { id } = req.params;
-    const result = await donHangService.donHangService.cancel([Number(id), req.user.ma_tai_khoan]);
-    return sendSuccess(res, 'Huỷ đơn hàng thành công', result[0] || { ma_don_hang: Number(id), trang_thai: 'DaHuy' });
+    const connection = await pool.getConnection();
+
+    try {
+      await connection.beginTransaction();
+
+      const [orderRows] = await connection.query(
+        'SELECT ma_don_hang, trang_thai FROM don_hang WHERE ma_don_hang = ? AND ma_tai_khoan = ? FOR UPDATE',
+        [id, req.user.ma_tai_khoan],
+      );
+      const order = (orderRows as any[])[0];
+
+      if (!order) {
+        await connection.rollback();
+        return sendError(res, 404, 'Không tìm thấy đơn hàng của bạn');
+      }
+
+      if (order.trang_thai !== 'ChoXacNhan') {
+        await connection.rollback();
+        return sendError(res, 400, 'Chỉ có thể huỷ đơn hàng đang chờ xác nhận');
+      }
+
+      const [items] = await connection.query(
+        'SELECT ma_san_pham, so_luong FROM chi_tiet_don_hang WHERE ma_don_hang = ? ORDER BY ma_san_pham',
+        [id],
+      );
+
+      for (const item of items as any[]) {
+        await connection.execute(
+          'UPDATE san_pham SET so_luong = so_luong + ? WHERE ma_san_pham = ?',
+          [item.so_luong, item.ma_san_pham],
+        );
+      }
+
+      await connection.execute(
+        'UPDATE don_hang SET trang_thai = ? WHERE ma_don_hang = ?',
+        ['DaHuy', id],
+      );
+      await connection.commit();
+
+      return sendSuccess(res, 'Huỷ đơn hàng thành công', { ma_don_hang: Number(id), trang_thai: 'DaHuy' });
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
   } catch (error) {
     if ((error as { sqlMessage?: string }).sqlMessage?.includes('Khong tim thay')) return sendError(res, 404, 'Không tìm thấy đơn hàng của bạn');
     if ((error as { sqlMessage?: string }).sqlMessage?.includes('Chi huy')) return sendError(res, 400, 'Chỉ có thể huỷ đơn hàng đang chờ xác nhận');

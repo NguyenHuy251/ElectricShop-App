@@ -2,8 +2,10 @@ import { Router } from 'express';
 import { cancelDonHang, createDonHang, deleteDonHang, getDonHang, getDonHangById, updateTrangThaiDonHang } from '../controllers/donHang.controller.js';
 import { authenticate } from '../middleware/auth.middleware.js';
 import { authorize } from '../middleware/role.middleware.js';
+import { previewCheckout } from '../controllers/checkout.controller.js';
 
 const router = Router();
+router.get('/checkout', authenticate, authorize('Admin', 'NhanVien', 'KhachHang'), previewCheckout);
 
 router.post('/', authenticate, authorize('Admin', 'NhanVien', 'KhachHang'), createDonHang);
 router.get('/', authenticate, authorize('Admin', 'NhanVien', 'KhachHang'), getDonHang);
