@@ -12,7 +12,7 @@ test.afterEach(() => { pool.getConnection = originalConnection; pool.query = ori
 test.after(async () => { await pool.end(); });
 function response() { return { statusCode: 200, status(code) { this.statusCode = code; return this; }, json(body) { this.body = body; return this; } }; }
 const request = (body = {}) => ({ user: { ma_tai_khoan: 4, vai_tro: 'KhachHang' }, body: { ma_don_hang: 12, ma_san_pham: 7, so_sao: 5, noi_dung: '  Rất tốt  ', ...body } });
-function database({ status = 'ChoXacNhan', existing = false, fail = false } = {}) {
+function database({ status = 'DaGiao', existing = false, fail = false } = {}) {
   const state = { inserts: [], commits: 0, rollbacks: 0, releases: 0 };
   pool.getConnection = async () => ({
     beginTransaction: async () => {}, commit: async () => { state.commits++; }, rollback: async () => { state.rollbacks++; }, release: () => { state.releases++; },
@@ -38,15 +38,15 @@ test('reviews require authentication and valid integer IDs, stars and bounded te
   }
 });
 
-test('reviews reject absent or canceled purchases without inserting', async () => {
-  for (const status of [null, 'DaHuy']) {
+test('reviews reject absent, undelivered or canceled purchases without inserting', async () => {
+  for (const status of [null, 'ChoXacNhan', 'DaXacNhan', 'DangGiao', 'DaHuy']) {
     const state = database({ status }), res = response(); await createDanhGia(request(), res);
     assert.equal(res.statusCode, 403); assert.equal(state.inserts.length, 0); assert.equal(state.rollbacks, 1); assert.equal(state.releases, 1);
   }
 });
 
-test('reviews accept purchased products in every non-canceled order status', async () => {
-  for (const status of ['ChoXacNhan', 'DaXacNhan', 'DangGiao', 'DaGiao']) {
+test('reviews accept only delivered purchased products', async () => {
+  for (const status of ['DaGiao']) {
     const state = database({ status }), res = response(); await createDanhGia(request(), res);
     assert.equal(res.statusCode, 200); assert.equal(res.body.data.ma_danh_gia, 9);
     assert.deepEqual(state.inserts, [[7, 4, 5, 'Rất tốt']]); assert.equal(state.commits, 1); assert.equal(state.releases, 1);
@@ -76,6 +76,37 @@ test('order details restore saved reviews for the order owner', async () => {
   };
   const res = response(); await getDonHangById({ ...request(), params: { id: '12' } }, res);
   assert.equal(res.statusCode, 200); assert.equal(res.body.data.reviews[0].ma_danh_gia, 9);
+});
+
+test('order details enable reviews only for the owner of a delivered order', async () => {
+  for (const status of ['ChoXacNhan', 'DaXacNhan', 'DangGiao', 'DaGiao', 'DaHuy']) {
+    for (const accountId of [4, 5]) {
+      pool.query = async (sql) => {
+        if (sql.includes('sp_don_hang_get_by_id')) return [[[{ ma_don_hang: 12, ma_tai_khoan: 4, trang_thai: status }], [{ ma_san_pham: 7 }]]];
+        return [[]];
+      };
+      const res = response();
+      await getDonHangById({ user: { ma_tai_khoan: accountId, vai_tro: 'Admin' }, params: { id: '12' } }, res);
+      assert.equal(res.statusCode, 200);
+      assert.equal(res.body.data.can_review, status === 'DaGiao' && accountId === 4);
+    }
+  }
+});
+
+test('review updates enforce ownership and trim saved content', async () => {
+  for (const owner of [4, 5]) {
+    let updates = 0;
+    pool.query = async (sql, args) => {
+      if (sql.includes('sp_danh_gia_get_by_id')) return [[[{ ma_danh_gia: 9, ma_tai_khoan: owner }]]];
+      assert.match(sql, /sp_danh_gia_update/);
+      assert.deepEqual(args, [9, 4, 'Tốt']); updates++;
+      return [[[{ affectedRows: 1 }]]];
+    };
+    const res = response();
+    await updateDanhGia({ ...request(), params: { id: '9' }, body: { so_sao: 4, noi_dung: '  Tốt  ' } }, res);
+    assert.equal(res.statusCode, owner === 4 ? 200 : 404);
+    assert.equal(updates, owner === 4 ? 1 : 0);
+  }
 });
 
 test('review route permits all buyer roles but still rejects orders they do not own', async () => {

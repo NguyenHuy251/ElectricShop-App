@@ -12,8 +12,12 @@ test('checkout transactions against an isolated MySQL database', { skip: process
   try {
     await admin.query(`CREATE DATABASE \`${database}\` CHARACTER SET utf8mb4`);
     await admin.query(`USE \`${database}\``);
-    const schema = await readFile(new URL('../database.sql', import.meta.url), 'utf8');
+    const schema = await readFile(new URL('../database/database.sql', import.meta.url), 'utf8');
     await admin.query(schema.slice(schema.indexOf('CREATE TABLE tai_khoan'), schema.indexOf('INSERT INTO tai_khoan')));
+    // Order-detail authorization calls this routine before checking the owner.
+    const detailProcedure = schema.match(/CREATE PROCEDURE sp_don_hang_get_by_id\([\s\S]*?\$\$/)?.[0];
+    assert.ok(detailProcedure, 'Order detail procedure must exist in the test schema');
+    await admin.query(detailProcedure.slice(0, -2));
     process.env.DB_NAME = database;
     ({ pool } = await import('../dist/config/database.js'));
     const { createDonHang, previewCheckout } = await import('../dist/controllers/checkout.controller.js');

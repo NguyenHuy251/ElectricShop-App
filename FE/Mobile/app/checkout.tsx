@@ -4,11 +4,11 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { EmptyState, LoadingState, ProductImage } from '@/components/shop-ui';
-import { authService } from '@/services/auth.service';
-import { orderService } from '@/services/order.service';
-import type { CheckoutPayload, CheckoutQuote, CheckoutSelection } from '@/types';
-import { formatCurrency, getApiMessage } from '@/utils/format';
+import { EmptyState, LoadingState, ProductImage } from '../components/shop-ui';
+import { authService } from '../services/auth.service';
+import { orderService } from '../services/order.service';
+import type { CheckoutPayload, CheckoutQuote, CheckoutSelection } from '../types';
+import { formatCurrency, getApiMessage } from '../utils/format';
 
 type Form = Pick<CheckoutPayload, 'ho_ten_nguoi_nhan' | 'so_dien_thoai' | 'dia_chi_giao_hang' | 'ghi_chu'>;
 type Attempt = { payload: CheckoutPayload; quote: CheckoutQuote };
@@ -17,7 +17,7 @@ const blank: Form = { ho_ten_nguoi_nhan: '', so_dien_thoai: '', dia_chi_giao_han
 export default function CheckoutScreen() {
   const { source, productId, quantity } = useLocalSearchParams<{ source?: string; productId?: string; quantity?: string }>();
   const router = useRouter();
-  if (source !== undefined && (source !== 'buy_now' || !/^\d+$/.test(productId || '') || !/^\d+$/.test(quantity || '') || Number(productId) < 1 || Number(quantity) < 1 || Number(quantity) > 999)) {
+  if ((source !== undefined && source !== 'cart' && source !== 'buy_now') || (source !== 'buy_now' && (productId !== undefined || quantity !== undefined)) || (source === 'buy_now' && (!/^\d+$/.test(productId || '') || !Number.isSafeInteger(Number(productId)) || !/^\d+$/.test(quantity || '') || Number(productId) < 1 || Number(quantity) < 1 || Number(quantity) > 999))) {
     return <EmptyState icon="error-outline" title="Thông tin mua hàng không hợp lệ" action="Chọn sản phẩm" onAction={() => router.replace('/products')} />;
   }
   return <CheckoutContent key={`${source || 'cart'}:${productId}:${quantity}`} initialSelection={source === 'buy_now' ? { source, ma_san_pham: Number(productId), so_luong: Number(quantity) } : {}} />;
@@ -31,6 +31,7 @@ function CheckoutContent({ initialSelection }: { initialSelection: CheckoutSelec
   const [quote, setQuote] = useState<CheckoutQuote | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [checking, setChecking] = useState(false);
   const [review, setReview] = useState(false);
   const [error, setError] = useState('');
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -70,7 +71,8 @@ function CheckoutContent({ initialSelection }: { initialSelection: CheckoutSelec
     setConfirmed(false);
   };
 
-  const checkForm = () => {
+  const checkForm = async () => {
+    if (busy.current) return;
     const next = { ...form, ho_ten_nguoi_nhan: form.ho_ten_nguoi_nhan.trim(), so_dien_thoai: form.so_dien_thoai.replace(/[\s().-]/g, '').replace(/^\+84/, '0'), dia_chi_giao_hang: form.dia_chi_giao_hang.trim(), ghi_chu: form.ghi_chu.trim() };
     const errors: Record<string, string> = {};
     if (next.ho_ten_nguoi_nhan.length < 2 || next.ho_ten_nguoi_nhan.length > 100) errors.ho_ten_nguoi_nhan = 'Nhập họ tên từ 2 đến 100 ký tự.';
@@ -80,8 +82,16 @@ function CheckoutContent({ initialSelection }: { initialSelection: CheckoutSelec
     setFieldErrors(errors);
     setForm(next);
     if (Object.keys(errors).length) { setError('Vui lòng kiểm tra các thông tin được đánh dấu bên dưới.'); return; }
-    setError('');
-    setReview(true);
+    setError(''); setConfirmed(false);
+    busy.current = true; setChecking(true);
+    try {
+      const { data } = await orderService.getCheckout(selection);
+      setQuote(data);
+      if (!data.can_checkout) { setError('Sản phẩm hoặc tồn kho đã thay đổi. Vui lòng kiểm tra lại.'); return; }
+      if (quote && quote.snapshot !== data.snapshot) setError('Giá hoặc giỏ hàng đã thay đổi. Vui lòng kiểm tra thông tin mới bên dưới trước khi xác nhận.');
+      setReview(true);
+    } catch (err) { setError(getApiMessage(err, 'Không thể kiểm tra giá và tồn kho. Vui lòng thử lại.')); }
+    finally { busy.current = false; setChecking(false); }
   };
 
   const submit = async () => {
@@ -97,13 +107,15 @@ function CheckoutContent({ initialSelection }: { initialSelection: CheckoutSelec
       await AsyncStorage.setItem(storageKey.current, JSON.stringify(attempt));
       pending.current = attempt;
       const result = await orderService.createOrder(attempt.payload);
-      await AsyncStorage.removeItem(storageKey.current);
+      // The server has confirmed the order. A local cleanup failure must not turn it into a failed purchase.
+      await AsyncStorage.removeItem(storageKey.current).catch(() => undefined);
       pending.current = null;
       router.replace({ pathname: '/checkout-success', params: { orderId: String(result.data.ma_don_hang) } });
     } catch (err: any) {
       setError(getApiMessage(err, 'Chưa xác định được kết quả đặt hàng. Vui lòng thử lại.'));
       if (err?.response && [400, 409].includes(err.response.status)) {
-        await AsyncStorage.removeItem(storageKey.current);
+        try { await AsyncStorage.removeItem(storageKey.current); }
+        catch { setUncertain(true); return; }
         pending.current = null;
         setUncertain(false);
         setReview(false);
@@ -121,7 +133,7 @@ function CheckoutContent({ initialSelection }: { initialSelection: CheckoutSelec
 
   const field = (key: keyof Form, label: string, placeholder: string, maxLength: number, multiline = false) => <View style={styles.field} key={key}>
     <Text style={styles.label}>{label}</Text>
-    <TextInput accessibilityLabel={label} value={form[key]} onChangeText={value => change(key, value)} placeholder={placeholder} placeholderTextColor="#84938B" maxLength={maxLength} multiline={multiline} keyboardType={key === 'so_dien_thoai' ? 'phone-pad' : 'default'} autoComplete={key === 'so_dien_thoai' ? 'tel' : key === 'ho_ten_nguoi_nhan' ? 'name' : 'off'} style={[styles.input, multiline && styles.multiline, Boolean(fieldErrors[key]) && styles.invalid]} />
+    <TextInput editable={!checking && !submitting} accessibilityLabel={label} value={form[key]} onChangeText={value => change(key, value)} placeholder={placeholder} placeholderTextColor="#84938B" maxLength={maxLength} multiline={multiline} keyboardType={key === 'so_dien_thoai' ? 'phone-pad' : 'default'} autoComplete={key === 'so_dien_thoai' ? 'tel' : key === 'ho_ten_nguoi_nhan' ? 'name' : 'off'} style={[styles.input, multiline && styles.multiline, Boolean(fieldErrors[key]) && styles.invalid]} />
     {fieldErrors[key] ? <Text accessibilityRole="alert" style={styles.errorText}>{fieldErrors[key]}</Text> : null}
   </View>;
 
@@ -152,12 +164,12 @@ function CheckoutContent({ initialSelection }: { initialSelection: CheckoutSelec
             <Text style={styles.amount}>{formatCurrency(Number(item.gia_ban) * item.so_luong)}</Text>
           </View>)}
           {quote.issues.map((issue, index) => <Text key={index} style={styles.errorText}>{issue}</Text>)}
-          {!quote.can_checkout ? <Text style={styles.errorText}>Vui lòng kiểm tra sản phẩm và số lượng trước khi tiếp tục.</Text> : null}
+          {!quote.can_checkout ? <><Text style={styles.errorText}>Vui lòng kiểm tra sản phẩm và số lượng trước khi tiếp tục.</Text><Pressable accessibilityRole="button" disabled={checking || submitting} onPress={checkForm}><Text style={styles.link}>Kiểm tra lại giá và tồn kho</Text></Pressable></> : null}
         </View>
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Giao hàng & thanh toán</Text>
           <View style={styles.payment}><MaterialIcons name="radio-button-checked" size={23} color="#176B52" /><View style={{ flex: 1 }}><Text style={styles.name}>Thanh toán khi nhận hàng (COD)</Text><Text style={styles.muted}>Trả tiền cho nhân viên giao hàng khi nhận đơn. Bạn chưa cần thanh toán lúc đặt hàng.</Text></View></View>
-          <View style={styles.notice}><Text style={styles.muted}>Giao hàng tiêu chuẩn · Miễn phí giao hàng. Cửa hàng sẽ liên hệ xác nhận đơn và thời gian giao phù hợp.</Text></View>
+          <View style={styles.notice}><Text style={styles.muted}>Giao hàng tiêu chuẩn · {quote.phi_giao_hang === 0 ? 'Miễn phí giao hàng' : `Phí giao hàng ${formatCurrency(quote.phi_giao_hang)}`}. Cửa hàng sẽ liên hệ xác nhận đơn và thời gian giao phù hợp.</Text></View>
         </View>
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Chi tiết thanh toán</Text>
@@ -165,8 +177,8 @@ function CheckoutContent({ initialSelection }: { initialSelection: CheckoutSelec
           <View style={styles.row}><Text style={styles.muted}>Phí giao hàng</Text><Text style={styles.link}>{quote.phi_giao_hang === 0 ? 'Miễn phí' : formatCurrency(quote.phi_giao_hang)}</Text></View>
           <View style={[styles.row, styles.total]}><Text style={styles.name}>Tổng thanh toán khi nhận hàng</Text><Text style={styles.totalAmount}>{formatCurrency(quote.tong_tien)}</Text></View>
           {review ? <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: confirmed, disabled: submitting || uncertain }} disabled={submitting || uncertain} onPress={() => setConfirmed(value => !value)} style={styles.payment}><MaterialIcons name={confirmed ? 'check-box' : 'check-box-outline-blank'} color="#176B52" size={24} /><Text style={[styles.muted, { flex: 1 }]}>Tôi đã kiểm tra thông tin nhận hàng, sản phẩm và tổng tiền phải trả.</Text></Pressable> : null}
-          <Pressable accessibilityRole="button" accessibilityLabel={submitting ? 'Đang gửi yêu cầu' : uncertain ? 'Kiểm tra lại đơn' : review ? 'Xác nhận đặt hàng COD' : 'Kiểm tra đơn hàng'} disabled={submitting || !quote.can_checkout || (review && !confirmed)} style={[styles.button, (submitting || !quote.can_checkout || (review && !confirmed)) && styles.disabled]} onPress={review ? submit : checkForm}>
-            <Text style={styles.buttonText}>{submitting ? 'Đang gửi yêu cầu...' : uncertain ? 'Kiểm tra lại đơn' : review ? 'Xác nhận đặt hàng COD' : 'Kiểm tra đơn hàng'}</Text><MaterialIcons name="arrow-forward" size={20} color="#fff" />
+          <Pressable accessibilityRole="button" accessibilityLabel={checking ? 'Đang kiểm tra giá và tồn kho' : submitting ? 'Đang gửi yêu cầu' : uncertain ? 'Kiểm tra lại đơn' : review ? 'Xác nhận đặt hàng COD' : 'Kiểm tra đơn hàng'} disabled={checking || submitting || !quote.can_checkout || (review && !confirmed)} style={[styles.button, (checking || submitting || !quote.can_checkout || (review && !confirmed)) && styles.disabled]} onPress={review ? submit : checkForm}>
+            <Text style={styles.buttonText}>{checking ? 'Đang kiểm tra giá và tồn kho...' : submitting ? 'Đang gửi yêu cầu...' : uncertain ? 'Kiểm tra lại đơn' : review ? 'Xác nhận đặt hàng COD' : 'Kiểm tra đơn hàng'}</Text><MaterialIcons name="arrow-forward" size={20} color="#fff" />
           </Pressable>
           <Text style={styles.hint}>Đơn được tạo ở trạng thái chờ xác nhận. Bạn có thể hủy khi cửa hàng chưa xác nhận đơn.</Text>
         </View>

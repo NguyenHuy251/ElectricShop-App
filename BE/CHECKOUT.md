@@ -11,7 +11,7 @@ Trong `FE/Mobile`, cấu hình `EXPO_PUBLIC_API_URL` trỏ về BE rồi chạy 
 1. Đăng nhập, thêm sản phẩm vào giỏ; số lượng phải là số nguyên 1–999, không vượt tồn kho và sản phẩm phải đang bán.
 2. Giỏ hàng → Tiến hành thanh toán. FE tải thông tin người dùng mới nhất và báo giá từ `GET /api/don-hang/checkout`.
 3. Nhập họ tên, số điện thoại di động Việt Nam, địa chỉ đầy đủ và ghi chú tùy chọn. Địa chỉ riêng của đơn không tự ghi đè hồ sơ.
-4. Kiểm tra đơn, chọn xác nhận thông tin, bấm đặt hàng COD. Phí giao hàng bằng 0 theo chính sách hiện có; không có giảm giá, phụ phí hay thu tiền online.
+4. Bấm kiểm tra đơn: mobile lấy lại giá và tồn kho từ server. Nếu giá hoặc giỏ thay đổi, hiển thị thông tin mới để khách kiểm tra, chọn xác nhận rồi đặt hàng COD. Phí giao hàng bằng 0 theo chính sách hiện có; không có giảm giá, phụ phí hay thu tiền online.
 5. BE kiểm tra lại thông tin, khóa giỏ và tồn kho trong transaction, đối chiếu giá/số lượng với báo giá đã xem. Nếu có thay đổi, FE yêu cầu kiểm tra lại, không tự chấp nhận tổng tiền mới.
 6. Thành công: lưu đơn `ChoXacNhan`, lưu giá sản phẩm tại thời điểm đặt, trừ tồn kho, xóa giỏ và ghi kết quả chống trùng trong cùng transaction. Cột `thanh_tien` do MySQL tự tính.
 7. Nếu mất phản hồi, FE lưu lại yêu cầu theo tài khoản và gửi lại đúng `request_id`; BE trả lại đơn cũ. Khôi phục vẫn hoạt động sau khi tải lại trình duyệt.
@@ -39,7 +39,16 @@ Không có thay đổi schema mới cho tính năng mua ngay; sử dụng bảng
 - 409: giỏ, giá hoặc tồn kho thay đổi; tải báo giá và xác nhận lại.
 - 503 / lỗi mạng: giữ yêu cầu và thử lại để kiểm tra kết quả.
 
-## Kiểm thử
+## Đánh giá sản phẩm trên mobile
+
+- Vào Đơn hàng → Chi tiết đơn hàng. Chỉ chủ đơn có trạng thái `DaGiao` được gửi đánh giá cho sản phẩm thuộc đơn đó. API kiểm tra lại quyền sở hữu, trạng thái và sản phẩm; không dựa vào việc ẩn nút trên mobile.
+- Mỗi tài khoản đánh giá một lần cho mỗi sản phẩm, kể cả khi mua trong nhiều đơn. Chọn 1–5 sao, nhận xét không bắt buộc và tối đa 2.000 ký tự. Có thể sửa số sao và nội dung đánh giá của mình.
+- Khi mất phản hồi gửi đánh giá, mobile đọc lại đánh giá đã lưu trong chi tiết đơn để tránh yêu cầu người dùng tạo lại đánh giá đã thành công.
+- Chi tiết đơn tự tải lại khi quay về màn hình, hỗ trợ kéo xuống làm mới và thử lại khi lỗi. Trang sản phẩm hiện có tự tải lại danh sách đánh giá khi được mở lại.
+- `can_review` trong API chi tiết đơn chỉ bật cho chủ đơn đã giao; nhân viên đang xem đơn của người khác không có nút đánh giá.
+- Không tự coi trạng thái đã giao là đã đối soát tiền COD. Thanh toán online cần tích hợp cổng thanh toán và xác minh giao dịch riêng.
+
+## Kiểm thử tự động và kiểm tra thủ công
 
 `npm test`: build BE và chạy unit tests. Để chạy thêm test transaction MySQL trong PowerShell:
 

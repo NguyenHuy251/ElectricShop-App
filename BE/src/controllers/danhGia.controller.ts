@@ -58,9 +58,9 @@ export async function createDanhGia(req: AuthRequest, res: Response) {
         [ma_don_hang, req.user.ma_tai_khoan, ma_san_pham],
       );
       const order = (orders as { trang_thai: string }[])[0];
-      if (!order || order.trang_thai === 'DaHuy') {
+      if (!order || order.trang_thai !== 'DaGiao') {
         await connection.rollback();
-        return sendError(res, 403, 'Bạn chỉ có thể đánh giá sản phẩm trong đơn hàng đã đặt và chưa hủy');
+        return sendError(res, 403, 'Bạn chỉ có thể đánh giá sản phẩm trong đơn hàng của mình đã giao thành công');
       }
       const [existing] = await connection.query('SELECT ma_danh_gia FROM danh_gia WHERE ma_san_pham = ? AND ma_tai_khoan = ? FOR UPDATE', [ma_san_pham, req.user.ma_tai_khoan]);
       if ((existing as unknown[]).length) {
@@ -93,7 +93,7 @@ export async function updateDanhGia(req: AuthRequest, res: Response) {
 
     const rows = await danhGiaService.getById(Number(id));
     if (!rows.some(review => review.ma_danh_gia === Number(id) && review.ma_tai_khoan === req.user?.ma_tai_khoan)) return sendError(res, 404, 'Không tìm thấy đánh giá của bạn');
-    await danhGiaService.update([Number(id), so_sao ?? null, noi_dung ?? null]);
+    await danhGiaService.update([Number(id), so_sao ?? null, typeof noi_dung === 'string' ? noi_dung.trim() : null]);
 
     return sendSuccess(res, 'Cập nhật đánh giá thành công', { ma_danh_gia: Number(id) });
   } catch (error) {

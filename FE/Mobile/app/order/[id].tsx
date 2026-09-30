@@ -1,11 +1,11 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { CancelOrderButton } from '@/components/cancel-order-button';
-import { OrderProductReview } from '@/components/order-product-review';
+import { useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useCallback, useRef, useState } from 'react';
+import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { CancelOrderButton } from '../../components/cancel-order-button';
+import { OrderProductReview } from '../../components/order-product-review';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { EmptyState, LoadingState } from '@/components/shop-ui';
+import { EmptyState, LoadingState } from '../../components/shop-ui';
 import { orderService } from '../../services/order.service';
 import type { Order } from '../../types';
 import { formatCurrency, formatDate, getApiMessage } from '../../utils/format';
@@ -29,33 +29,42 @@ export default function OrderDetailScreen() {
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
+  const version = useRef(0);
 
-  useEffect(() => {
-    const loadOrder = async () => {
+  const loadOrder = useCallback(async () => {
+      const request = ++version.current;
       try {
+        if (!/^\d+$/.test(id || '') || !Number.isSafeInteger(Number(id)) || Number(id) < 1) throw new Error('Invalid order');
         const response = await orderService.getOrderById(Number(id));
+        if (request !== version.current) return;
         setOrder(response.data);
+        setError('');
       } catch (error) {
+        if (request !== version.current) return;
         setError(getApiMessage(error, 'Không thể tải chi tiết đơn hàng'));
       } finally {
-        setLoading(false);
+        if (request === version.current) { setLoading(false); setRefreshing(false); }
       }
-    };
-
-    loadOrder();
   }, [id]);
+  useFocusEffect(useCallback(() => {
+    setLoading(true); setOrder(null);
+    void loadOrder();
+    return () => { version.current++; };
+  }, [loadOrder]));
 
   if (loading) {
     return <SafeAreaView style={styles.safe}><LoadingState message="Đang tải chi tiết đơn hàng..." /></SafeAreaView>;
   }
 
   if (!order) {
-    return <SafeAreaView style={styles.safe}><EmptyState icon="receipt-long" title="Không tìm thấy đơn hàng" message={error} /></SafeAreaView>;
+    return <SafeAreaView style={styles.safe}><EmptyState icon="receipt-long" title="Không tìm thấy đơn hàng" message={error} action="Thử lại" onAction={loadOrder} /></SafeAreaView>;
   }
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+      <ScrollView refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); void loadOrder(); }} />} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+        {error ? <Text accessibilityRole="alert" style={styles.date}>{error} · Kéo xuống để thử lại.</Text> : null}
         <View style={styles.header}>
           <View>
             <Text style={styles.eyebrow}>CHI TIẾT ĐƠN HÀNG</Text>
@@ -79,9 +88,10 @@ export default function OrderDetailScreen() {
               </View>
               <Text style={styles.itemTotal}>{formatCurrency(item.thanh_tien || Number(item.don_gia) * Number(item.so_luong))}</Text>
             </View>
-            {order.trang_thai !== 'DaHuy' ? <OrderProductReview orderId={order.ma_don_hang} productId={item.ma_san_pham} review={order.reviews?.find(review => review.ma_san_pham === item.ma_san_pham)} /> : null}
+            {order.can_review && order.trang_thai === 'DaGiao' ? <OrderProductReview key={JSON.stringify([order.ma_don_hang, item.ma_san_pham, order.reviews?.find(review => review.ma_san_pham === item.ma_san_pham)])} orderId={order.ma_don_hang} productId={item.ma_san_pham} review={order.reviews?.find(review => review.ma_san_pham === item.ma_san_pham)} /> : null}
             </View>
           ))}
+          {order.trang_thai !== 'DaGiao' ? <Text style={styles.date}>{order.trang_thai === 'DaHuy' ? 'Đơn đã hủy không đủ điều kiện đánh giá.' : 'Bạn có thể đánh giá sản phẩm sau khi đơn được giao thành công.'}</Text> : null}
           <View style={styles.totalRow}><Text style={styles.totalLabel}>Tổng thanh toán</Text><Text style={styles.total}>{formatCurrency(order.tong_tien)}</Text></View>
         </View>
 

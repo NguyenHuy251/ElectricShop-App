@@ -2,6 +2,10 @@ import api from './api';
 import type { Product, ProductReview } from '../types';
 
 export const productService = {
+  updateReview: async (id: number, payload: { so_sao: number; noi_dung: string }) => {
+    const response = await api.put(`/danh-gia/${id}`, payload);
+    return response.data;
+  },
   createReview: async (payload: { ma_don_hang: number; ma_san_pham: number; so_sao: number; noi_dung: string }): Promise<{ data: { ma_danh_gia: number } }> => {
     const response = await api.post('/danh-gia', payload);
     return response.data;

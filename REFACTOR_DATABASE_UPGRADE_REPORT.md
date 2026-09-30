@@ -196,3 +196,42 @@ danh_muc (1) ────< (N) danh_muc_thong_so (N) >──── (1) thong_so 
 
 ### Tài liệu báo cáo:
 22. `REFACTOR_DATABASE_UPGRADE_REPORT.md` *(Tệp báo cáo tổng kết này)*
+
+---
+
+## 8. BỔ SUNG THANH TOÁN VÀ ĐÁNH GIÁ MOBILE (30/09/2026)
+
+### Quy trình thanh toán COD
+- Hỗ trợ giỏ hàng và mua ngay một sản phẩm; mua ngay giữ nguyên giỏ hàng.
+- Kiểm tra thông tin nhận hàng, lấy lại báo giá và tồn kho trước bước xác nhận. Giá hoặc giỏ thay đổi phải được khách kiểm tra lại; tổng tiền do backend tính.
+- Khóa thao tác khi đang kiểm tra/gửi, lưu yêu cầu trước khi gửi và dùng lại mã yêu cầu khi mất phản hồi để tránh tạo đơn trùng.
+- Lỗi xóa dữ liệu tạm trên thiết bị sau khi server xác nhận không biến đơn thành thất bại. Màn hình kết quả phản ánh đơn đã giao/đã hủy khi khôi phục yêu cầu cũ.
+- Đặt hàng thành công không đồng nghĩa đã thanh toán. Hiện chỉ triển khai COD, chưa tích hợp thanh toán online hay đối soát tiền thu hộ.
+
+### Quy trình đánh giá
+- Chỉ chủ đơn `DaGiao` được đánh giá sản phẩm thuộc đơn; backend từ chối đơn chưa giao, đã hủy, đơn không thuộc người dùng hoặc sản phẩm không thuộc đơn.
+- Mỗi tài khoản có một đánh giá cho mỗi sản phẩm; cho phép sửa đánh giá của mình. Chọn 1–5 sao, nhận xét tùy chọn tối đa 2.000 ký tự.
+- Khôi phục đánh giá đã lưu nếu gửi thành công nhưng mất phản hồi. Chi tiết đơn tải lại khi quay về màn hình và hỗ trợ kéo xuống cập nhật.
+- API trả `can_review` để mobile chỉ hiển thị thao tác đúng điều kiện, kể cả khi nhân viên xem đơn khách khác.
+
+### Kiểm chứng và giới hạn
+- Backend build và 24 kiểm thử tự động đạt; có kiểm thử điều kiện đánh giá theo từng trạng thái, quyền sở hữu và cập nhật nội dung.
+- Mobile `npx tsc --noEmit` đạt; ESLint các tệp mobile thay đổi đạt.
+- Đã thử chạy kiểm thử tích hợp bằng MySQL riêng, nhưng kết nối bị từ chối (`ER_ACCESS_DENIED_ERROR`). Chưa xác minh giao dịch với MySQL thực tế và chưa chạy giao diện trên thiết bị.
+- Không thay đổi schema cho đợt bổ sung này. Database cũ cần bảng `checkout_requests` theo hướng dẫn `BE/CHECKOUT.md`; không chạy lại script tạo database trên dữ liệu đang sử dụng.
+
+### Kịch bản kiểm tra trên thiết bị
+1. Đặt COD từ giỏ và mua ngay, kiểm tra địa chỉ/số điện thoại sai, giá/tồn kho thay đổi, bấm gửi nhiều lần và mất mạng sau khi gửi.
+2. Kiểm tra cùng yêu cầu chỉ trả một mã đơn, tồn kho trừ một lần; mua ngay không xóa giỏ.
+3. Đơn chờ xác nhận được hủy, hoàn tồn kho; đơn đã xác nhận không có thao tác hủy của khách.
+4. Đơn chưa giao/đã hủy không có nút đánh giá. Sau khi nhân viên chuyển đúng luồng sang đã giao, kéo xuống làm mới để đánh giá.
+5. Gửi 1–5 sao, sửa nội dung, mở lại đơn và trang sản phẩm; đánh giá được giữ, không tạo bản ghi trùng khi mua cùng sản phẩm ở đơn khác.
+
+## 9. KHẮC PHỤC API KHÔNG TẢI DỮ LIỆU (30/09/2026)
+
+- Sau khi cập nhật thông tin MySQL trong `BE/.env`, đã tải lại backend để nhận cấu hình mới.
+- Database chỉ có 8 procedure của phần nâng cấp sản phẩm; bổ sung 49 procedure còn thiếu và sửa collation tham số của `sp_san_pham_list`, `sp_san_pham_find_by_code` cho khớp cột sản phẩm. Không xóa hay tạo lại dữ liệu bảng.
+- Thêm `BE/scripts/repair-procedures.mjs`: chạy không có tham số để xem kế hoạch; thêm `--apply` để thực hiện. Script lưu SQL hoàn tác trong thư mục tạm `electric-procedures-*`, chỉ tạo procedure thiếu và sửa hai procedure tìm kiếm khi cần. Chạy lại sau sửa trả danh sách thao tác rỗng.
+- Kiểm tra qua địa chỉ LAN `192.168.1.11:3000`: API danh sách sản phẩm, tìm kiếm Samsung, chi tiết sản phẩm, danh mục và thương hiệu đều trả HTTP 200 với dữ liệu.
+- Đã chạy lại kiểm thử với MySQL riêng sau khi kết nối được: **36/36 đạt**, không bỏ qua kiểm thử tích hợp. Bổ sung procedure chi tiết đơn vào database kiểm thử để kiểm tra quyền xem đơn đúng thực tế.
+- Mobile đã cấu hình API theo IP LAN hiện tại; cần tải lại ứng dụng đang mở. Chưa kiểm chứng trực tiếp giao diện trên điện thoại.
