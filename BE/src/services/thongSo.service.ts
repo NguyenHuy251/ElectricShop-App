@@ -105,3 +105,194 @@ export async function validateSpecificationsForCategory(
     requiredMissingIds,
   };
 }
+
+export async function addThongSoToDanhMuc(
+  ma_danh_muc: number,
+  ma_thong_so: number,
+  bat_buoc = false,
+  thu_tu_hien_thi = 0
+): Promise<void> {
+  await pool.query(
+    `INSERT INTO danh_muc_thong_so (ma_danh_muc, ma_thong_so, bat_buoc, thu_tu_hien_thi)
+     VALUES (?, ?, ?, ?)
+     ON DUPLICATE KEY UPDATE bat_buoc = VALUES(bat_buoc), thu_tu_hien_thi = VALUES(thu_tu_hien_thi)`,
+    [ma_danh_muc, ma_thong_so, bat_buoc ? 1 : 0, thu_tu_hien_thi]
+  );
+}
+
+export async function updateThongSoInDanhMuc(
+  ma_danh_muc: number,
+  ma_thong_so: number,
+  data: { bat_buoc?: boolean; thu_tu_hien_thi?: number }
+): Promise<void> {
+  const updates: string[] = [];
+  const params: unknown[] = [];
+
+  if (data.bat_buoc !== undefined) {
+    updates.push('bat_buoc = ?');
+    params.push(data.bat_buoc ? 1 : 0);
+  }
+  if (data.thu_tu_hien_thi !== undefined) {
+    updates.push('thu_tu_hien_thi = ?');
+    params.push(data.thu_tu_hien_thi);
+  }
+
+  if (updates.length === 0) return;
+
+  params.push(ma_danh_muc, ma_thong_so);
+  await pool.query(
+    `UPDATE danh_muc_thong_so SET ${updates.join(', ')} WHERE ma_danh_muc = ? AND ma_thong_so = ?`,
+    params
+  );
+}
+
+export async function removeThongSoFromDanhMuc(
+  ma_danh_muc: number,
+  ma_thong_so: number
+): Promise<void> {
+  await pool.query(
+    'DELETE FROM danh_muc_thong_so WHERE ma_danh_muc = ? AND ma_thong_so = ?',
+    [ma_danh_muc, ma_thong_so]
+  );
+}
+
+export async function createThongSo(data: {
+  ma_nhom_thong_so: number;
+  ten_thong_so: string;
+  kieu_du_lieu?: 'TEXT' | 'NUMBER' | 'BOOLEAN' | 'OPTION';
+  don_vi?: string | null;
+  cho_phep_loc?: boolean;
+  thu_tu_hien_thi?: number;
+}): Promise<number> {
+  const [result] = await pool.query(
+    `INSERT INTO thong_so (ma_nhom_thong_so, ten_thong_so, kieu_du_lieu, don_vi, cho_phep_loc, thu_tu_hien_thi, trang_thai)
+     VALUES (?, ?, ?, ?, ?, ?, TRUE)`,
+    [
+      data.ma_nhom_thong_so,
+      data.ten_thong_so.trim(),
+      data.kieu_du_lieu || 'TEXT',
+      data.don_vi?.trim() || null,
+      data.cho_phep_loc ? 1 : 0,
+      data.thu_tu_hien_thi || 0,
+    ]
+  );
+  return (result as any).insertId;
+}
+
+export async function updateThongSo(
+  ma_thong_so: number,
+  data: {
+    ma_nhom_thong_so?: number;
+    ten_thong_so?: string;
+    kieu_du_lieu?: 'TEXT' | 'NUMBER' | 'BOOLEAN' | 'OPTION';
+    don_vi?: string | null;
+    cho_phep_loc?: boolean;
+    thu_tu_hien_thi?: number;
+    trang_thai?: boolean;
+  }
+): Promise<void> {
+  const updates: string[] = [];
+  const params: unknown[] = [];
+
+  if (data.ma_nhom_thong_so !== undefined) {
+    updates.push('ma_nhom_thong_so = ?');
+    params.push(data.ma_nhom_thong_so);
+  }
+  if (data.ten_thong_so !== undefined) {
+    updates.push('ten_thong_so = ?');
+    params.push(data.ten_thong_so.trim());
+  }
+  if (data.kieu_du_lieu !== undefined) {
+    updates.push('kieu_du_lieu = ?');
+    params.push(data.kieu_du_lieu);
+  }
+  if (data.don_vi !== undefined) {
+    updates.push('don_vi = ?');
+    params.push(data.don_vi?.trim() || null);
+  }
+  if (data.cho_phep_loc !== undefined) {
+    updates.push('cho_phep_loc = ?');
+    params.push(data.cho_phep_loc ? 1 : 0);
+  }
+  if (data.thu_tu_hien_thi !== undefined) {
+    updates.push('thu_tu_hien_thi = ?');
+    params.push(data.thu_tu_hien_thi);
+  }
+  if (data.trang_thai !== undefined) {
+    updates.push('trang_thai = ?');
+    params.push(data.trang_thai ? 1 : 0);
+  }
+
+  if (updates.length === 0) return;
+
+  params.push(ma_thong_so);
+  await pool.query(
+    `UPDATE thong_so SET ${updates.join(', ')} WHERE ma_thong_so = ?`,
+    params
+  );
+}
+
+export async function deleteThongSo(ma_thong_so: number): Promise<{ softDeleted: boolean }> {
+  // Check if any product is using this specification
+  const [inProducts] = await pool.query(
+    'SELECT COUNT(*) as count FROM thong_so_san_pham WHERE ma_thong_so = ?',
+    [ma_thong_so]
+  );
+  const count = Number((inProducts as any[])[0]?.count || 0);
+
+  if (count > 0) {
+    // Soft delete to preserve historical integrity
+    await pool.query('UPDATE thong_so SET trang_thai = FALSE WHERE ma_thong_so = ?', [ma_thong_so]);
+    return { softDeleted: true };
+  }
+
+  // Not used in any product, safe to remove completely
+  await pool.query('DELETE FROM danh_muc_thong_so WHERE ma_thong_so = ?', [ma_thong_so]);
+  await pool.query('DELETE FROM thong_so WHERE ma_thong_so = ?', [ma_thong_so]);
+  return { softDeleted: false };
+}
+
+export async function createNhomThongSo(data: {
+  ten_nhom_thong_so: string;
+  thu_tu_hien_thi?: number;
+}): Promise<number> {
+  const [result] = await pool.query(
+    `INSERT INTO nhom_thong_so (ten_nhom_thong_so, thu_tu_hien_thi, trang_thai)
+     VALUES (?, ?, TRUE)`,
+    [data.ten_nhom_thong_so.trim(), data.thu_tu_hien_thi || 0]
+  );
+  return (result as any).insertId;
+}
+
+export async function updateNhomThongSo(
+  ma_nhom_thong_so: number,
+  data: {
+    ten_nhom_thong_so?: string;
+    thu_tu_hien_thi?: number;
+    trang_thai?: boolean;
+  }
+): Promise<void> {
+  const updates: string[] = [];
+  const params: unknown[] = [];
+
+  if (data.ten_nhom_thong_so !== undefined) {
+    updates.push('ten_nhom_thong_so = ?');
+    params.push(data.ten_nhom_thong_so.trim());
+  }
+  if (data.thu_tu_hien_thi !== undefined) {
+    updates.push('thu_tu_hien_thi = ?');
+    params.push(data.thu_tu_hien_thi);
+  }
+  if (data.trang_thai !== undefined) {
+    updates.push('trang_thai = ?');
+    params.push(data.trang_thai ? 1 : 0);
+  }
+
+  if (updates.length === 0) return;
+
+  params.push(ma_nhom_thong_so);
+  await pool.query(
+    `UPDATE nhom_thong_so SET ${updates.join(', ')} WHERE ma_nhom_thong_so = ?`,
+    params
+  );
+}

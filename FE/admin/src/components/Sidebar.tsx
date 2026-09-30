@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 export const navigation = [
-  ['/dashboard', 'Tổng quan'], ['/products', 'Sản phẩm'], ['/categories', 'Danh mục'], ['/brands', 'Thương hiệu'],
+  ['/dashboard', 'Tổng quan'], ['/products', 'Sản phẩm'], ['/categories', 'Danh mục'], ['/category-specifications', 'Danh mục thông số'], ['/brands', 'Thương hiệu'],
   ['/orders', 'Đơn hàng'], ['/customers', 'Khách hàng / Tài khoản'], ['/employees', 'Nhân viên'], ['/reviews', 'Đánh giá'], ['/contacts', 'Liên hệ'],
 ];
 export default function Sidebar({ onNavigate }: { onNavigate?: () => void }) {

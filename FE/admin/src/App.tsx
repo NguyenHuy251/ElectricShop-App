@@ -7,6 +7,7 @@ import LoginPage from './pages/LoginPage';
 const DashboardPage = lazy(() => import('./pages/DashboardPage'));
 const ProductsPage = lazy(() => import('./pages/ProductsPage'));
 const CategoriesPage = lazy(() => import('./pages/CategoriesPage'));
+const CategorySpecificationsPage = lazy(() => import('./pages/CategorySpecificationsPage'));
 const BrandsPage = lazy(() => import('./pages/BrandsPage'));
 const OrdersPage = lazy(() => import('./pages/OrdersPage'));
 const CustomersPage = lazy(() => import('./pages/CustomersPage'));
@@ -25,7 +26,9 @@ export default function App() {
   return <AuthProvider><Routes><Route path="/login" element={<LoginPage />} /><Route element={<ProtectedRoute />}><Route element={<AdminLayout />}>
     <Route index element={<Navigate to="/dashboard" replace />} />
     <Route path="dashboard" element={<DashboardPage />} /><Route path="products" element={<ProductsPage />} />
-    <Route path="categories" element={<CategoriesPage />} /><Route path="brands" element={<BrandsPage />} />
+    <Route path="categories" element={<CategoriesPage />} /><Route path="category-specifications" element={<CategorySpecificationsPage />} />
+    <Route path="specifications" element={<Navigate to="/category-specifications" replace />} />
+    <Route path="brands" element={<BrandsPage />} />
     <Route path="orders" element={<OrdersPage />} /><Route path="reviews" element={<ReviewsPage />} /><Route path="contacts" element={<ContactsPage />} />
     <Route element={<ProtectedRoute adminOnly />}><Route path="customers" element={<CustomersPage />} /><Route path="employees" element={<EmployeesPage />} /></Route>
   </Route></Route><Route path="*" element={<Navigate to="/dashboard" replace />} /></Routes></AuthProvider>;
