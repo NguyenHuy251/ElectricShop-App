@@ -117,4 +117,5 @@ export interface Order {
   ngay_dat?: string;
   items?: any[];
   reviews?: ProductReview[];
+  can_review?: boolean;
 }

@@ -1,15 +1,17 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { productService } from '@/services/product.service';
-import type { ProductReview } from '@/types';
-import { getApiMessage } from '@/utils/format';
+import { productService } from '../services/product.service';
+import { orderService } from '../services/order.service';
+import type { ProductReview } from '../types';
+import { getApiMessage } from '../utils/format';
 
 export function OrderProductReview({ orderId, productId, review }: {
   orderId: number; productId: number; review?: ProductReview;
 }) {
   const [saved, setSaved] = useState(review);
   const [expanded, setExpanded] = useState(false);
+  const [editing, setEditing] = useState(false);
   const [stars, setStars] = useState(0);
   const [content, setContent] = useState('');
   const [sending, setSending] = useState(false);
@@ -22,16 +24,30 @@ export function OrderProductReview({ orderId, productId, review }: {
     if (!stars) { setError('Vui lòng chọn số sao trước khi gửi.'); return; }
     busy.current = true; setSending(true); setError('');
     try {
-      const result = await productService.createReview({ ma_don_hang: orderId, ma_san_pham: productId, so_sao: stars, noi_dung: content.trim() });
+      const result = current && editing
+        ? await productService.updateReview(current.ma_danh_gia, { so_sao: stars, noi_dung: content.trim() })
+        : await productService.createReview({ ma_don_hang: orderId, ma_san_pham: productId, so_sao: stars, noi_dung: content.trim() });
       setSaved({ ma_danh_gia: result.data.ma_danh_gia, ma_san_pham: productId, ho_ten: '', so_sao: stars, noi_dung: content.trim() });
-    } catch (err) { setError(getApiMessage(err, 'Chưa gửi được đánh giá. Vui lòng thử lại.')); }
+      setEditing(false); setExpanded(false);
+    } catch (err) {
+      // A timed-out create may already have committed. Recover the saved review before retrying.
+      try {
+        const { data } = await orderService.getOrderById(orderId);
+        const existing = (data.reviews as ProductReview[] | undefined)?.find(item => item.ma_san_pham === productId);
+        if (existing && (!editing || (existing.so_sao === stars && (existing.noi_dung || '') === content.trim()))) {
+          setSaved(existing); setEditing(false); setExpanded(false); return;
+        }
+      } catch { /* Keep the draft available while offline. */ }
+      setError(getApiMessage(err, 'Chưa gửi được đánh giá. Vui lòng thử lại.'));
+    }
     finally { busy.current = false; setSending(false); }
   }
 
   return <View style={styles.container}>
-    {current ? <View accessibilityLiveRegion="polite">
+    {current && !editing ? <View accessibilityLiveRegion="polite">
       <Text style={styles.title}>Đã đánh giá · {'★'.repeat(current.so_sao)}{'☆'.repeat(5 - current.so_sao)}</Text>
       {current.noi_dung ? <Text style={styles.body}>{current.noi_dung}</Text> : null}
+      <Pressable accessibilityRole="button" style={styles.toggle} onPress={() => { setStars(current.so_sao); setContent(current.noi_dung || ''); setError(''); setEditing(true); setExpanded(true); }}><Text style={styles.title}>Sửa đánh giá</Text></Pressable>
     </View> : <>
       <Pressable accessibilityRole="button" accessibilityState={{ expanded }} onPress={() => setExpanded(!expanded)} disabled={sending} style={styles.toggle}>
         <MaterialIcons name="rate-review" size={19} color="#176B52" />
@@ -47,8 +63,9 @@ export function OrderProductReview({ orderId, productId, review }: {
         <Text style={styles.counter}>{content.length}/2000</Text>
         {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
         <Pressable accessibilityRole="button" accessibilityState={{ disabled: sending }} disabled={sending} onPress={submit} style={[styles.submit, sending && { opacity: 0.6 }]}>
-          <Text style={styles.submitText}>{sending ? 'Đang gửi...' : 'Gửi đánh giá'}</Text>
+          <Text style={styles.submitText}>{sending ? 'Đang gửi...' : editing ? 'Lưu đánh giá' : 'Gửi đánh giá'}</Text>
         </Pressable>
+        {editing ? <Pressable accessibilityRole="button" disabled={sending} style={styles.toggle} onPress={() => { setEditing(false); setExpanded(false); setError(''); }}><Text style={styles.title}>Hủy chỉnh sửa</Text></Pressable> : null}
       </View> : null}
     </>}
   </View>;

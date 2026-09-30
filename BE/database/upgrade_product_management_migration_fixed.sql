@@ -308,6 +308,8 @@ WHERE hinh_anh IS NOT NULL AND hinh_anh <> '';
 
 DROP TABLE chi_tiet_san_pham_legacy;
 
+DELIMITER $$
+
 DROP PROCEDURE IF EXISTS sp_san_pham_list$$
 CREATE PROCEDURE sp_san_pham_list(
     IN p_search VARCHAR(200), IN p_ma_danh_muc INT, IN p_ma_thuong_hieu INT,
