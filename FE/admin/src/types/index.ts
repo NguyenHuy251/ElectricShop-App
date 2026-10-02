@@ -117,6 +117,17 @@ export interface Product {
   danh_sach_hinh_anh?: ProductImage[];
   specifications?: GroupedSpecification[];
   images?: ProductImage[];
+  variants?: ProductVariant[];
+}
+
+export interface ProductVariant {
+  ma_bien_the?: number;
+  ma_san_pham?: number;
+  ma_sku: string;
+  ten_bien_the: string;
+  gia_ban: number | string;
+  so_luong: number;
+  trang_thai: 'DangBan' | 'HetHang' | 'NgungBan';
 }
 
 export interface ProductInput {
@@ -133,6 +144,7 @@ export interface ProductInput {
   mo_ta?: string | null;
   thong_so?: { ma_thong_so: number; gia_tri?: string | null; gia_tri_so?: number | null; gia_tri_bool?: boolean | null }[];
   danh_sach_hinh_anh?: { duong_dan: string; mo_ta?: string | null; la_anh_chinh?: boolean; thu_tu_hien_thi?: number }[];
+  variants?: ProductVariant[];
 }
 
 export interface Order {
