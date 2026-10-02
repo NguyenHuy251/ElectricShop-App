@@ -174,7 +174,7 @@ export interface Review {
 }
 export interface Contact {
   ma_lien_he: number; ho_ten: string; email: string; so_dien_thoai?: string; tieu_de: string; noi_dung: string;
-  ngay_gui: string; trang_thai: 'ChuaXuLy' | 'DangXuLy' | 'DaXuLy';
+  phan_hoi?: string | null; ngay_phan_hoi?: string | null; ngay_gui: string; trang_thai: 'ChoPhanHoi' | 'DaPhanHoi';
 }
 export interface Pagination { page: number; limit: number; total: number; totalPages: number }
 export interface ApiResponse<T> { success: boolean; message: string; data: T; pagination?: Pagination }

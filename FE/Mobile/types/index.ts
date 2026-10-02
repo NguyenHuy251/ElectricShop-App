@@ -9,10 +9,24 @@ export interface User {
   trang_thai: 'HoatDong' | 'Khoa';
 }
 
+export interface Contact {
+  ma_lien_he: number;
+  ho_ten: string;
+  email: string;
+  so_dien_thoai?: string | null;
+  tieu_de: string;
+  noi_dung: string;
+  phan_hoi?: string | null;
+  ngay_phan_hoi?: string | null;
+  ngay_gui?: string;
+  trang_thai: 'ChoPhanHoi' | 'DaPhanHoi';
+}
+
 export interface ProductSpecification {
   ma_thong_so: number;
   ten_thong_so?: string;
   ten_nhom?: string;
+  kieu_du_lieu?: string;
   don_vi?: string | null;
   gia_tri?: string | null;
   gia_tri_so?: number | null;
@@ -32,6 +46,7 @@ export interface GroupedSpecificationItem {
   name: string;
   value: string;
   unit?: string | null;
+  type?: string;
 }
 
 export interface GroupedSpecification {
@@ -57,6 +72,17 @@ export interface Product {
   danh_sach_hinh_anh?: ProductImage[];
   specifications?: GroupedSpecification[];
   images?: ProductImage[];
+  variants?: ProductVariant[];
+}
+
+export interface ProductVariant {
+  ma_bien_the: number;
+  ma_san_pham: number;
+  ma_sku: string;
+  ten_bien_the: string;
+  gia_ban: number | string;
+  so_luong: number;
+  trang_thai: 'DangBan' | 'HetHang' | 'NgungBan';
 }
 
 export interface ProductReview {

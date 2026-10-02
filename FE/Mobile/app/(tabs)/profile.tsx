@@ -120,6 +120,16 @@ export default function ProfileScreen() {
             <Text style={styles.menuText}>Giỏ hàng</Text>
             <MaterialIcons name="chevron-right" size={23} color="#84938B" />
           </Pressable>
+          <Pressable style={styles.menuItem} onPress={() => router.push('/contact' as any)}>
+            <MaterialIcons name="support-agent" size={22} color="#176B52" />
+            <Text style={styles.menuText}>Gửi liên hệ cho cửa hàng</Text>
+            <MaterialIcons name="chevron-right" size={23} color="#84938B" />
+          </Pressable>
+          <Pressable style={styles.menuItem} onPress={() => router.push('/contact-history' as any)}>
+            <MaterialIcons name="forum" size={22} color="#176B52" />
+            <Text style={styles.menuText}>Phản hồi của tôi</Text>
+            <MaterialIcons name="chevron-right" size={23} color="#84938B" />
+          </Pressable>
           <View style={styles.menuItem}>
             <MaterialIcons name="location-on" size={22} color="#176B52" />
             <Text style={styles.menuText}>{user?.dia_chi || 'Chưa có địa chỉ giao hàng'}</Text>

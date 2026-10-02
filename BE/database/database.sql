@@ -258,7 +258,7 @@ CREATE TABLE lien_he (
     so_dien_thoai VARCHAR(15),
     tieu_de VARCHAR(200),
     noi_dung TEXT NOT NULL,
-    trang_thai ENUM('ChuaXuLy', 'DangXuLy', 'DaXuLy') DEFAULT 'ChuaXuLy',
+    trang_thai ENUM('ChoPhanHoi', 'DaPhanHoi') DEFAULT 'ChoPhanHoi',
     ngay_gui DATETIME DEFAULT CURRENT_TIMESTAMP,
 
     FOREIGN KEY (ma_tai_khoan)
@@ -775,7 +775,7 @@ CREATE PROCEDURE sp_danh_gia_delete(IN p_id INT) BEGIN DELETE FROM danh_gia WHER
 
 DROP PROCEDURE IF EXISTS sp_lien_he_create$$
 CREATE PROCEDURE sp_lien_he_create(IN p_ma_tai_khoan INT, IN p_ho_ten VARCHAR(100), IN p_email VARCHAR(100), IN p_so_dien_thoai VARCHAR(15), IN p_tieu_de VARCHAR(200), IN p_noi_dung TEXT)
-BEGIN INSERT INTO lien_he (ma_tai_khoan,ho_ten,email,so_dien_thoai,tieu_de,noi_dung,trang_thai) VALUES (p_ma_tai_khoan,p_ho_ten,p_email,p_so_dien_thoai,p_tieu_de,p_noi_dung,'ChuaXuLy'); SELECT LAST_INSERT_ID() AS insertId, ROW_COUNT() AS affectedRows; END$$
+BEGIN INSERT INTO lien_he (ma_tai_khoan,ho_ten,email,so_dien_thoai,tieu_de,noi_dung,trang_thai) VALUES (p_ma_tai_khoan,p_ho_ten,p_email,p_so_dien_thoai,p_tieu_de,p_noi_dung,'ChoPhanHoi'); SELECT LAST_INSERT_ID() AS insertId, ROW_COUNT() AS affectedRows; END$$
 DROP PROCEDURE IF EXISTS sp_lien_he_list$$
 CREATE PROCEDURE sp_lien_he_list() BEGIN SELECT * FROM lien_he ORDER BY ma_lien_he DESC; END$$
 DROP PROCEDURE IF EXISTS sp_lien_he_get_by_id$$

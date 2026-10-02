@@ -6,7 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { EmptyState, LoadingState, ProductCard, ProductImage } from '@/components/shop-ui';
 import { cartService } from '@/services/cart.service';
 import { productService } from '@/services/product.service';
-import type { GroupedSpecification, Product, ProductImage as IProductImage, ProductReview } from '@/types';
+import type { GroupedSpecification, Product, ProductImage as IProductImage, ProductReview, ProductVariant } from '@/types';
 import { formatCurrency, formatDate, getApiMessage } from '@/utils/format';
 
 export default function ProductDetailScreen() {
@@ -18,6 +18,8 @@ function ProductDetail({ id, initialQuantity }: { id: string; initialQuantity?: 
   const router = useRouter();
   const [product, setProduct] = useState<Product | null>(null);
   const [quantity, setQuantity] = useState(/^\d+$/.test(initialQuantity || '') && Number(initialQuantity) > 0 ? String(Math.min(999, Number(initialQuantity))) : '1');
+  const [selectedVariantId, setSelectedVariantId] = useState<number | null>(null);
+  const [selectedSpecs, setSelectedSpecs] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [adding, setAdding] = useState(false);
@@ -52,6 +54,8 @@ function ProductDetail({ id, initialQuantity }: { id: string; initialQuantity?: 
       const { data } = await productService.getProductById(Number(id));
       if (current !== version.current) return;
       setProduct(data); setLoadError('');
+      setSelectedVariantId(data.variants?.[0]?.ma_bien_the || null);
+      setSelectedSpecs({});
       setRelatedError('');
 
       // Determine primary image
@@ -80,8 +84,12 @@ function ProductDetail({ id, initialQuantity }: { id: string; initialQuantity?: 
   }, [load]));
 
   const count = Number(quantity);
-  const max = Math.min(999, Number(product?.so_luong || 0));
-  const available = product?.trang_thai === 'DangBan' && max > 0 && Number(product.gia_ban) > 0;
+  const variants = product?.variants || [];
+  const selectedVariant: ProductVariant | undefined = variants.find(variant => variant.ma_bien_the === selectedVariantId) || variants[0];
+  const displayPrice = selectedVariant?.gia_ban ?? product?.gia_ban;
+  const displayStock = selectedVariant?.so_luong ?? product?.so_luong;
+  const max = Math.min(999, Number(displayStock || 0));
+  const available = product?.trang_thai === 'DangBan' && (!selectedVariant || selectedVariant.trang_thai === 'DangBan') && max > 0 && Number(displayPrice) > 0;
   const validQuantity = /^\d+$/.test(quantity) && Number.isInteger(count) && count >= 1 && count <= max;
   const canBuy = Boolean(available && validQuantity && !adding && !refreshing && !loadError);
   const changeQuantity = (value: string) => { setQuantity(value); setError(''); setNotice(''); };
@@ -135,6 +143,7 @@ function ProductDetail({ id, initialQuantity }: { id: string; initialQuantity?: 
           name: s.ten_thong_so || '',
           value: val,
           unit: s.don_vi || null,
+          type: s.kieu_du_lieu || 'TEXT',
         });
       }
       return Array.from(map.entries()).map(([group, items]) => ({ group, items }));
@@ -142,12 +151,14 @@ function ProductDetail({ id, initialQuantity }: { id: string; initialQuantity?: 
     return [];
   }, [product]);
 
+  const optionSpecs = groupedSpecs.flatMap(group => group.items.filter(item => item.type === 'OPTION'));
+
   if (loading) return <LoadingState message="Đang tải chi tiết sản phẩm..." />;
   if (!product) return <SafeAreaView style={styles.safe}><EmptyState icon="inventory-2" title="Chưa có thông tin sản phẩm" message={loadError} action="Thử lại" onAction={load} /><Pressable accessibilityRole="button" onPress={() => router.replace('/products')}><Text style={styles.centerLink}>Xem sản phẩm khác</Text></Pressable></SafeAreaView>;
 
   const currentImageUri = selectedImageUri || product.hinh_anh;
   const rating = reviews.length ? (reviews.reduce((sum, item) => sum + Number(item.so_sao), 0) / reviews.length).toFixed(1) : null;
-  const stockLabel = product.trang_thai === 'NgungBan' ? 'Sản phẩm đã ngừng bán' : product.trang_thai === 'HetHang' || max < 1 ? 'Tạm hết hàng' : !available ? 'Sản phẩm chưa sẵn sàng bán' : `Còn ${product.so_luong} sản phẩm`;
+  const stockLabel = product.trang_thai === 'NgungBan' ? 'Sản phẩm đã ngừng bán' : product.trang_thai === 'HetHang' || max < 1 ? 'Tạm hết hàng' : !available ? 'Sản phẩm chưa sẵn sàng bán' : `Còn ${displayStock} sản phẩm`;
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
@@ -189,7 +200,7 @@ function ProductDetail({ id, initialQuantity }: { id: string; initialQuantity?: 
         <Text style={styles.title}>{product.ten_san_pham}</Text>
         <Text style={styles.muted}>Mã: {product.ma_san_pham_code}{product.ten_thuong_hieu ? ` · ${product.ten_thuong_hieu}` : ''}</Text>
         {rating && !reviewError ? <Text style={styles.rating}>★ {rating}/5 · {reviews.length} đánh giá</Text> : null}
-        <Text style={styles.price}>{formatCurrency(product.gia_ban)}</Text>
+        <Text style={styles.price}>{formatCurrency(displayPrice)}</Text>
         <View style={styles.inline}>
           <MaterialIcons name={available ? 'check-circle' : 'error-outline'} size={19} color={available ? '#176B52' : '#A52D2D'} />
           <Text style={[styles.stock, !available && styles.error]}>{stockLabel}</Text>
@@ -201,6 +212,25 @@ function ProductDetail({ id, initialQuantity }: { id: string; initialQuantity?: 
             <Text style={styles.muted}>Bảo hành {product.bao_hanh} tháng chính hãng.</Text>
           ) : null}
         </View>
+
+        {variants.length > 0 ? <View style={styles.card}>
+            <Text style={styles.sectionTitle}>Chọn biến thể</Text>
+            <Text style={styles.muted}>Lựa chọn: {selectedVariant?.ten_bien_the}</Text>
+            <View style={styles.variantRow}>{variants.map(variant => <Pressable key={variant.ma_bien_the} accessibilityRole="button" accessibilityState={{ selected: selectedVariant?.ma_bien_the === variant.ma_bien_the }} onPress={() => { setSelectedVariantId(variant.ma_bien_the); setQuantity('1'); setError(''); }} style={[styles.variantButton, selectedVariant?.ma_bien_the === variant.ma_bien_the && styles.variantSelected, (variant.trang_thai !== 'DangBan' || Number(variant.so_luong) < 1) && styles.disabled]} disabled={variant.trang_thai !== 'DangBan' || Number(variant.so_luong) < 1}>
+              <Text style={[styles.variantLabel, selectedVariant?.ma_bien_the === variant.ma_bien_the && styles.variantLabelSelected]}>{variant.ten_bien_the}</Text>
+              <Text style={styles.variantPrice}>{formatCurrency(variant.gia_ban)}</Text>
+            </Pressable>)}</View>
+        </View> : null}
+
+        {optionSpecs.length > 0 ? <View style={styles.card}>
+          <Text style={styles.sectionTitle}>Chọn thông số</Text>
+          {optionSpecs.map(spec => {
+            const values = String(spec.value || '').split(/[,|/]/).map(value => value.trim()).filter(Boolean);
+            const choices = values.length > 1 ? values : [String(spec.value || 'Đang cập nhật')];
+            const selected = selectedSpecs[String(spec.ma_thong_so)] || choices[0];
+            return <View key={spec.ma_thong_so} style={styles.specChoice}><Text style={styles.choiceTitle}>{spec.name}</Text><View style={styles.variantRow}>{choices.map(choice => <Pressable key={choice} accessibilityRole="button" accessibilityState={{ selected: selected === choice }} onPress={() => setSelectedSpecs(current => ({ ...current, [String(spec.ma_thong_so)]: choice }))} style={[styles.variantButton, selected === choice && styles.variantSelected]}><Text style={[styles.variantLabel, selected === choice && styles.variantLabelSelected]}>{choice}{spec.unit && !choice.includes(spec.unit) ? ` ${spec.unit}` : ''}</Text></Pressable>)}</View></View>;
+          })}
+        </View> : null}
 
         {/* Quantity selector */}
         <View style={styles.card}>
@@ -340,7 +370,7 @@ function ProductDetail({ id, initialQuantity }: { id: string; initialQuantity?: 
         ) : null}
         <View style={styles.row}>
           <Text style={styles.muted}>Tạm tính</Text>
-          <Text style={styles.footerPrice}>{validQuantity ? formatCurrency(Number(product.gia_ban) * count) : '—'}</Text>
+          <Text style={styles.footerPrice}>{validQuantity ? formatCurrency(Number(displayPrice) * count) : '—'}</Text>
         </View>
         <View style={styles.actions}>
           <Pressable
@@ -405,6 +435,14 @@ const styles = StyleSheet.create({
   link: { color: '#176B52', fontWeight: '700', paddingVertical: 8, fontSize: 13 },
   centerLink: { color: '#176B52', textAlign: 'center', padding: 20 },
   benefits: { backgroundColor: '#EAF2E6', padding: 14, borderRadius: 14, gap: 6 },
+  variantRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  variantButton: { minWidth: 108, borderWidth: 1, borderColor: '#D9E2D8', borderRadius: 12, padding: 10, gap: 4, backgroundColor: '#fff' },
+  variantSelected: { borderColor: '#176B52', backgroundColor: '#EDF5E9' },
+  variantLabel: { color: '#183C35', fontSize: 14, fontWeight: '800' },
+  variantLabelSelected: { color: '#176B52' },
+  variantPrice: { color: '#6D7D76', fontSize: 11 },
+  specChoice: { gap: 9 },
+  choiceTitle: { color: '#183C35', fontSize: 14, fontWeight: '800' },
   card: { padding: 18, borderRadius: 20, borderWidth: 1, borderColor: '#E3E9E1', backgroundColor: '#fff', gap: 14 },
   sectionTitle: { color: '#183C35', fontSize: 17, fontWeight: '800' },
   description: { color: '#596C62', fontSize: 14, lineHeight: 23 },

@@ -5,13 +5,13 @@ export const dateTime = (value?: string | null) => value && !Number.isNaN(Date.p
 export const labels: Record<string, string> = {
   Admin: 'Quản trị viên', NhanVien: 'Nhân viên', KhachHang: 'Khách hàng',
   DangBan: 'Đang bán', HetHang: 'Hết hàng', NgungBan: 'Ngừng bán',
-  ChoXacNhan: 'Chờ xác nhận', DaXacNhan: 'Đã xác nhận', DangGiao: 'Đang giao', DaGiao: 'Đã giao', DaHuy: 'Đã hủy',
+  ChoXacNhan: 'Chờ xác nhận', DaXacNhan: 'Đã xác nhận', DangGiao: 'Đang giao', DaGiao: 'Đã giao', DaHuy: 'Đã hủy', ChoPhanHoi: 'Chờ phản hồi', DaPhanHoi: 'Đã phản hồi',
   HoatDong: 'Hoạt động', Khoa: 'Đã khóa', DangLam: 'Đang làm', NghiLam: 'Nghỉ làm',
   ChuaXuLy: 'Chưa xử lý', DangXuLy: 'Đang xử lý', DaXuLy: 'Đã xử lý',
   TienMat: 'Tiền mặt', ChuyenKhoan: 'Chuyển khoản', ThanhToanKhiNhanHang: 'Thanh toán khi nhận hàng',
 };
 export const options = (values: string[]) => values.map(value => ({ value, label: labels[value] || value }));
 export function Status({ value }: { value: string }) {
-  const color = ['DaGiao', 'DaXuLy', 'HoatDong', 'DangLam', 'DangBan'].includes(value) ? 'green' : ['DaHuy', 'Khoa', 'NghiLam', 'NgungBan'].includes(value) ? 'red' : ['ChoXacNhan', 'ChuaXuLy', 'HetHang'].includes(value) ? 'gold' : 'blue';
+  const color = ['DaGiao', 'DaXuLy', 'DaPhanHoi', 'HoatDong', 'DangLam', 'DangBan'].includes(value) ? 'green' : ['DaHuy', 'Khoa', 'NghiLam', 'NgungBan'].includes(value) ? 'red' : ['ChoXacNhan', 'ChoPhanHoi', 'HetHang'].includes(value) ? 'gold' : 'blue';
   return <Tag color={color}>{labels[value] || value}</Tag>;
 }

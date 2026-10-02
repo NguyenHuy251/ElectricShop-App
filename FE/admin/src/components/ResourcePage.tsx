@@ -13,9 +13,9 @@ interface Props<T extends object> {
   title: string; idKey: keyof T & string; api: { list: () => Promise<ApiResponse<T[]>>; get: (id: number) => Promise<T>; create?: (data: Partial<T>) => Promise<unknown>; update: (id: number, data: Partial<T>) => Promise<unknown>; remove: (id: number) => Promise<unknown> };
   columns: ColumnsType<T>; fields: Field[]; defaults?: Partial<T>; searchKeys: (keyof T)[];
   filter?: { key: keyof T; options: { value: string; label: string }[]; initial?: string };
-  canModify?: (row: T) => boolean; prepare?: (row: T) => Partial<T>; details?: (row: T) => ReactNode; extra?: ReactNode;
+  canModify?: (row: T) => boolean; canView?: (row: T) => boolean; canDelete?: (row: T) => boolean; prepare?: (row: T) => Partial<T>; details?: (row: T) => ReactNode; editDetails?: (row: T) => ReactNode; extra?: ReactNode; editLabel?: string;
 }
-export default function ResourcePage<T extends object>({ title, idKey, api, columns, fields, defaults, searchKeys, filter, canModify = () => true, prepare, details, extra }: Props<T>) {
+export default function ResourcePage<T extends object>({ title, idKey, api, columns, fields, defaults, searchKeys, filter, canModify = () => true, canView = () => true, canDelete = () => true, prepare, details, editDetails, extra, editLabel = 'Sửa' }: Props<T>) {
   const { message, modal } = App.useApp();
   const loader = useCallback(() => api.list(), [api]);
   const { data, loading, error, reload } = useLoad(loader);
@@ -40,7 +40,7 @@ export default function ResourcePage<T extends object>({ title, idKey, api, colu
     catch (e) { message.error(errorMessage(e)); throw e; } finally { lock.current = false; setBusy(false); }
   } });
   const rows = (data?.data || []).filter(row => (!filterValue || !filter || String(row[filter.key]) === filterValue) && searchKeys.some(key => String(row[key] ?? '').toLocaleLowerCase('vi').includes(search.toLocaleLowerCase('vi'))));
-  const tableColumns: ColumnsType<T> = [...columns, { title: 'Thao tác', key: 'actions', render: (_, row) => <Space wrap><Button disabled={busy} onClick={() => view(row, false)}>Chi tiết</Button><Button disabled={busy || !canModify(row)} onClick={() => view(row, true)}>Sửa</Button><Button danger disabled={busy || !canModify(row)} onClick={() => remove(row)}>Xóa</Button></Space> }];
+  const tableColumns: ColumnsType<T> = [...columns, { title: 'Thao tác', key: 'actions', render: (_, row) => <Space wrap>{canView(row) ? <Button disabled={busy} onClick={() => view(row, false)}>Chi tiết</Button> : null}{canModify(row) ? <Button disabled={busy} onClick={() => view(row, true)}>{editLabel}</Button> : null}{canDelete(row) ? <Button danger disabled={busy} onClick={() => remove(row)}>Xóa</Button> : null}</Space> }];
   return <><div className="page-heading"><h1 className="page-title">{title}</h1>{api.create && <Button type="primary" disabled={busy} onClick={() => { setEditing(null); form.resetFields(); form.setFieldsValue(defaults || {}); setOpen(true); }}>Thêm mới</Button>}</div>
     {extra}<LoadError error={error} retry={reload} /><div className="card"><Space className="toolbar" wrap><Input.Search aria-label="Tìm kiếm" placeholder="Tìm kiếm..." allowClear value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} />{filter && <Select aria-label="Lọc danh sách" placeholder="Tất cả" allowClear value={filterValue} options={filter.options} onChange={value => { setFilterValue(value); setPage(1); }} style={{ minWidth: 180 }} />}<Button onClick={reload} disabled={loading}>Làm mới</Button></Space>
       <Table<T> rowKey={idKey} columns={tableColumns} dataSource={rows} loading={loading} scroll={{ x: 900 }} locale={{ emptyText: <Empty description="Chưa có dữ liệu" /> }} pagination={{ current: Math.min(page, Math.max(1, Math.ceil(rows.length / 10))), pageSize: 10, onChange: setPage, showSizeChanger: false }} />
@@ -49,7 +49,7 @@ export default function ResourcePage<T extends object>({ title, idKey, api, colu
         if (lock.current) return; lock.current = true; setBusy(true);
         try { if (editing) await api.update(id(editing), values); else await api.create?.(values); message.success('Đã lưu thành công'); setOpen(false); await reload(); }
         catch (e) { fieldErrors(e, form); message.error(errorMessage(e)); } finally { lock.current = false; setBusy(false); }
-      }}><div className="form-grid">{fields.map(field => <Form.Item key={field.name} name={field.name} label={field.label} valuePropName={field.kind === 'switch' ? 'checked' : 'value'} rules={[...(field.required ? [{ required: true, message: `Vui lòng nhập ${field.label.toLowerCase()}` }] : []), ...(field.rules || [])]}>
+      }}>{editing && editDetails ? editDetails(editing) : null}<div className="form-grid">{fields.map(field => <Form.Item key={field.name} name={field.name} label={field.label} valuePropName={field.kind === 'switch' ? 'checked' : 'value'} rules={[...(field.required ? [{ required: true, message: `Vui lòng nhập ${field.label.toLowerCase()}` }] : []), ...(field.rules || [])]}>
         {field.kind === 'select' ? <Select allowClear={!field.required} showSearch optionFilterProp="label" options={field.options} disabled={busy || (!!editing && field.disabledOnEdit)} /> : field.kind === 'number' ? <InputNumber min={0} style={{ width: '100%' }} /> : field.kind === 'switch' ? <Switch /> : field.kind === 'textarea' ? <Input.TextArea rows={3} /> : <Input type={field.kind === 'date' ? 'date' : 'text'} disabled={busy || (!!editing && field.disabledOnEdit)} />}
       </Form.Item>)}</div></Form>
     </Modal><Drawer title="Thông tin chi tiết" open={!!detail} onClose={() => setDetail(null)} width={Math.min(640, window.innerWidth)}>{detail && (details ? details(detail) : <Descriptions column={1} bordered items={fields.map(field => {
