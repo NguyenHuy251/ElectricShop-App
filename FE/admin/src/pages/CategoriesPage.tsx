@@ -1,4 +1,4 @@
-import { Button } from 'antd';
+import { Button, Tooltip } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { SettingOutlined } from '@ant-design/icons';
 import ResourcePage from '../components/ResourcePage';
@@ -25,13 +25,12 @@ export default function CategoriesPage() {
           key: 'specs',
           width: 170,
           render: (_, row) => (
-            <Button
+            <Tooltip title="Cấu hình thông số"><Button
               type="link"
+              aria-label="Cấu hình thông số"
               icon={<SettingOutlined />}
               onClick={() => navigate(`/category-specifications?category=${row.ma_danh_muc}`)}
-            >
-              Cấu hình thông số
-            </Button>
+            /></Tooltip>
           ),
         },
         {
