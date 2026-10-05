@@ -1,4 +1,3 @@
-import { listVariants, saveVariants } from '../controllers/bienThe.controller.js';
 import { Router } from 'express';
 import {
   addProductImage,
@@ -19,8 +18,6 @@ const router = Router();
 
 router.get('/', getAllSanPham);
 router.get('/:id', getSanPhamById);
-router.get('/:id/bien-the', listVariants);
-router.put('/:id/bien-the', authenticate, authorize('Admin', 'NhanVien'), saveVariants);
 router.get('/:id/thong-so', getThongSoBySanPham);
 router.get('/:id/specifications', getThongSoBySanPham);
 router.get('/:id/hinh-anh', getProductImages);

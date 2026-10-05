@@ -1,4 +1,3 @@
-import { getVariants } from './bienThe.controller.js';
 import { Request, Response } from 'express';
 import { duplicateField } from '../utils/adminErrors.js';
 import { sendError, sendSuccess } from '../utils/response.js';
@@ -189,9 +188,7 @@ export async function getSanPhamById(req: Request, res: Response) {
     const specifications = groupSpecifications(product.thong_so_ky_thuat || []);
     const images = product.danh_sach_hinh_anh || [];
 
-    const variants = await getVariants(id);
     const fullResponse = {
-      variants,
       ...product,
       product: { ...product },
       images,
