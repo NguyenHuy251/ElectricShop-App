@@ -1,3 +1,4 @@
+import ProductVariants from '../components/ProductVariants';
 import { useCallback, useRef, useState } from 'react';
 import {
   App,
@@ -404,6 +405,7 @@ export default function ProductsPage() {
               render: (_, row) => (
                 <Space>
                   <Button onClick={() => viewDetail(row)}>Xem</Button>
+                  <ProductVariants product={row} />
                   <Button disabled={busy} onClick={() => edit(row)}>
                     Sửa
                   </Button>

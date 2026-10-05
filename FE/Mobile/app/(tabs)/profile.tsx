@@ -76,6 +76,8 @@ export default function ProfileScreen() {
       <KeyboardAvoidingView style={styles.keyboard} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
         <ScreenHeading eyebrow="GÓC RIÊNG CỦA BẠN" title="Xin chào, bạn!" subtitle="Mọi thông tin mua sắm, trong tầm tay." icon="person-outline" />
+        <Pressable accessibilityRole="button" onPress={() => router.push('/vouchers')} style={{ backgroundColor: '#E9F4ED', padding: 18, borderRadius: 16, flexDirection: 'row', alignItems: 'center', gap: 12, marginVertical: 12 }}><MaterialIcons name="local-offer" size={26} color="#176B52" /><View style={{ flex: 1 }}><Text style={{ color: '#176B52', fontWeight: '800', fontSize: 16 }}>Mã giảm giá của bạn</Text><Text style={{ color: '#61766A', marginTop: 4 }}>Xem mã và điều kiện sử dụng</Text></View><MaterialIcons name="chevron-right" size={24} color="#176B52" /></Pressable>
+
 
         {user ? (
           <View style={styles.card}>

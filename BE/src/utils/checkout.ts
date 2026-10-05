@@ -1,3 +1,4 @@
+import { voucherCode } from '../services/voucher.service.js';
 import { createHash } from 'node:crypto';
 
 export class CheckoutError extends Error {
@@ -60,5 +61,5 @@ export function validateCheckout(body: Record<string, unknown>) {
   const requestId = text('request_id');
   const snapshot = text('snapshot');
   if (!/^[a-zA-Z0-9_-]{16,100}$/.test(requestId) || !/^[a-f0-9]{64}$/.test(snapshot)) throw new CheckoutError(400, 'Vui lòng tải lại trang thanh toán trước khi đặt hàng.');
-  return { ho_ten_nguoi_nhan: name, so_dien_thoai: phone, dia_chi_giao_hang: address, ghi_chu: note, phuong_thuc_thanh_toan: 'ThanhToanKhiNhanHang', request_id: requestId, snapshot, ...checkoutSelection(body) };
+  return { ho_ten_nguoi_nhan: name, so_dien_thoai: phone, dia_chi_giao_hang: address, ghi_chu: note, phuong_thuc_thanh_toan: 'ThanhToanKhiNhanHang', request_id: requestId, snapshot, ...(voucherCode(body.ma_giam_gia) ? { ma_giam_gia: voucherCode(body.ma_giam_gia) } : {}), ...checkoutSelection(body) };
 }
