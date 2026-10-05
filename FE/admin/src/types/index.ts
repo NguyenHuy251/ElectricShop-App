@@ -148,9 +148,6 @@ export interface ProductInput {
 }
 
 export interface Order {
-  ma_giam_gia?: string;
-  tien_giam?: number;
-  tam_tinh?: number;
   ten_dang_nhap?: string;
   ho_ten?: string;
   ma_don_hang: number;

@@ -34,8 +34,6 @@ export async function getDonHangById(req: AuthRequest, res: Response) {
     }
 
     order.items = data.items;
-    const [discounts] = await pool.query('SELECT code AS ma_giam_gia, tam_tinh, tien_giam FROM voucher_su_dung WHERE ma_don_hang = ?', [id]);
-    Object.assign(order, (discounts as object[])[0] || { tien_giam: 0 });
     order.can_review = order.ma_tai_khoan === req.user.ma_tai_khoan && order.trang_thai === 'DaGiao';
 
     const [reviews] = await pool.query('SELECT ma_danh_gia, ma_san_pham, so_sao, noi_dung FROM danh_gia WHERE ma_tai_khoan = ?', [order.ma_tai_khoan]);

@@ -54,18 +54,7 @@ export interface GroupedSpecification {
   items: GroupedSpecificationItem[];
 }
 
-export interface ProductGroupVariant {
-  ma_san_pham: number;
-  ten_thuoc_tinh: string;
-  gia_tri: string;
-  ten_san_pham: string;
-  gia_ban: number;
-  so_luong: number;
-  trang_thai: string;
-}
-
 export interface Product {
-  product_variants?: ProductGroupVariant[];
   ma_san_pham: number;
   ma_danh_muc: number;
   ma_thuong_hieu: number;
@@ -106,7 +95,6 @@ export interface ProductReview {
 }
 
 export interface CheckoutSelection {
-  ma_giam_gia?: string;
   source?: 'buy_now';
   ma_san_pham?: number;
   so_luong?: number;
@@ -123,7 +111,6 @@ export interface CartItem {
 }
 
 export interface CheckoutQuote extends CheckoutSelection {
-  tien_giam?: number;
   items: CartItem[];
   tam_tinh: number;
   phi_giao_hang: number;
@@ -144,9 +131,6 @@ export interface CheckoutPayload extends CheckoutSelection {
 }
 
 export interface Order {
-  ma_giam_gia?: string;
-  tien_giam?: number;
-  tam_tinh?: number;
   ma_don_hang: number;
   ma_tai_khoan: number;
   ho_ten_nguoi_nhan: string;

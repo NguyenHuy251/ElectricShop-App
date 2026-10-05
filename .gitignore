@@ -118,7 +118,3 @@ Desktop.ini
 
 # Keep Markdown documents local
 *.md
-
-# Local verification exports and dependency backups
-FE/Mobile/.expo-*-check/
-FE/Mobile-dependencies-backup/

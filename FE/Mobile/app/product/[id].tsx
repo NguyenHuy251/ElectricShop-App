@@ -200,19 +200,6 @@ function ProductDetail({ id, initialQuantity }: { id: string; initialQuantity?: 
         <Text style={styles.title}>{product.ten_san_pham}</Text>
         <Text style={styles.muted}>Mã: {product.ma_san_pham_code}{product.ten_thuong_hieu ? ` · ${product.ten_thuong_hieu}` : ''}</Text>
         {rating && !reviewError ? <Text style={styles.rating}>★ {rating}/5 · {reviews.length} đánh giá</Text> : null}
-        {product.product_variants && product.product_variants.length > 1 ? <View style={styles.card}>
-          <Text style={styles.sectionTitle}>{product.product_variants[0].ten_thuoc_tinh}</Text>
-          <View style={styles.variantOptions}>{product.product_variants.map(variant => {
-            const selected = variant.ma_san_pham === product.ma_san_pham;
-            const soldOut = variant.trang_thai !== 'DangBan' || Number(variant.so_luong) < 1;
-            return <Pressable key={variant.ma_san_pham} accessibilityRole="button" accessibilityLabel={`${variant.gia_tri}, ${formatCurrency(variant.gia_ban)}${soldOut ? ', h?t h?ng' : ''}`} accessibilityState={{ selected, disabled: adding }} disabled={adding} style={[styles.variantOption, selected && styles.groupVariantSelected]}
-              onPress={() => { if (!selected && !busy.current) router.replace({ pathname: '/product/[id]', params: { id: String(variant.ma_san_pham) } }); }}>
-              <Text style={[styles.groupVariantLabel, selected && { color: '#176B52' }]}>{variant.gia_tri}</Text>
-              <Text style={styles.muted}>{formatCurrency(variant.gia_ban)}</Text>
-              {soldOut ? <Text style={styles.error}>H?t h?ng</Text> : null}
-            </Pressable>;
-          })}</View>
-        </View> : null}
         <Text style={styles.price}>{formatCurrency(displayPrice)}</Text>
         <View style={styles.inline}>
           <MaterialIcons name={available ? 'check-circle' : 'error-outline'} size={19} color={available ? '#176B52' : '#A52D2D'} />
@@ -426,10 +413,6 @@ function ProductDetail({ id, initialQuantity }: { id: string; initialQuantity?: 
 }
 
 const styles = StyleSheet.create({
-  variantOptions: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  variantOption: { borderWidth: 1, borderColor: '#DCE5DF', borderRadius: 12, padding: 12, minWidth: 92, gap: 4, backgroundColor: '#fff' },
-  groupVariantSelected: { borderColor: '#176B52', backgroundColor: '#EAF5EF', borderWidth: 2 },
-  groupVariantLabel: { color: '#183C35', fontSize: 14, fontWeight: '700' },
   safe: { flex: 1, backgroundColor: '#F6F7F2' },
   content: { padding: 20, paddingBottom: 28, width: '100%', maxWidth: 800, alignSelf: 'center', gap: 14 },
   imageCard: { borderRadius: 24, backgroundColor: '#EEF2E9', overflow: 'hidden' },

@@ -1,4 +1,3 @@
-import ProductVariants from '../components/ProductVariants';
 import { useCallback, useRef, useState } from 'react';
 import {
   App,
@@ -448,7 +447,6 @@ export default function ProductsPage() {
               title: 'Thao tác',
               render: (_, row) => (
                 <Space>
-                  <ProductVariants product={row} />
                   <Tooltip title="Xem chi tiết"><Button aria-label="Xem chi tiết" icon={<EyeOutlined />} onClick={() => viewDetail(row)} /></Tooltip>
                   <Tooltip title="Thêm biến thể"><Button aria-label="Thêm biến thể" disabled={busy} icon={<PlusOutlined />} onClick={() => addVariant(row)} /></Tooltip>
                   <Tooltip title="Sửa sản phẩm"><Button aria-label="Sửa sản phẩm" disabled={busy} icon={<EditOutlined />} onClick={() => edit(row)} /></Tooltip>

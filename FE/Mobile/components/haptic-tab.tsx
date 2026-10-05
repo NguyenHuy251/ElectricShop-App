@@ -1,4 +1,4 @@
-import { PlatformPressable } from 'expo-router/react-navigation';
+import { PlatformPressable } from '@react-navigation/elements';
 import * as Haptics from 'expo-haptics';
 import type { ComponentProps } from 'react';
 

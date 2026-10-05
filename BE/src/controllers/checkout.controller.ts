@@ -1,4 +1,3 @@
-import { applyVoucher, voucherCode } from '../services/voucher.service.js';
 import { createHash } from 'node:crypto';
 import { Response } from 'express';
 import { pool } from '../config/database.js';
@@ -20,13 +19,13 @@ export async function previewCheckout(req: AuthRequest, res: Response) {
       const [rows] = await pool.query('SELECT ma_san_pham, ten_san_pham, gia_ban, hinh_anh, so_luong AS ton_kho, trang_thai FROM san_pham WHERE ma_san_pham = ?', [selection.ma_san_pham]);
       const product = (rows as CheckoutItem[])[0];
       if (!product) throw new CheckoutError(404, 'Sản phẩm không còn tồn tại.');
-      return sendSuccess(res, 'Thông tin thanh toán ngay', { ...await applyVoucher(pool, summarizeCart([{ ...product, so_luong: selection.so_luong! }]), voucherCode(req.query.ma_giam_gia), req.user.ma_tai_khoan, req.user.vai_tro), ...selection });
+      return sendSuccess(res, 'Thông tin thanh toán ngay', { ...summarizeCart([{ ...product, so_luong: selection.so_luong! }]), ...selection });
     }
     const [rows] = await pool.query(
       `SELECT cth.ma_san_pham, cth.so_luong, sp.ten_san_pham, sp.gia_ban, sp.hinh_anh, sp.so_luong AS ton_kho, sp.trang_thai
        FROM gio_hang gh JOIN chi_tiet_gio_hang cth ON cth.ma_gio_hang = gh.ma_gio_hang
        JOIN san_pham sp ON sp.ma_san_pham = cth.ma_san_pham WHERE gh.ma_tai_khoan = ? ORDER BY sp.ma_san_pham`, [req.user.ma_tai_khoan]);
-    return sendSuccess(res, 'Thông tin thanh toán', await applyVoucher(pool, summarizeCart(rows as CheckoutItem[]), voucherCode(req.query.ma_giam_gia), req.user.ma_tai_khoan, req.user.vai_tro));
+    return sendSuccess(res, 'Thông tin thanh toán', summarizeCart(rows as CheckoutItem[]));
   } catch (error) { return fail(res, error); }
 }
 
@@ -72,7 +71,7 @@ export async function createDonHang(req: AuthRequest, res: Response) {
         if (!product) throw new CheckoutError(409, 'Một sản phẩm không còn tồn tại. Vui lòng kiểm tra lại giỏ hàng.');
         items.push({ ...product, so_luong: line.so_luong });
       }
-      const quote = await applyVoucher(connection, summarizeCart(items), input.ma_giam_gia || '', req.user.ma_tai_khoan, req.user.vai_tro, true);
+      const quote = summarizeCart(items);
       if (!quote.can_checkout) throw new CheckoutError(409, quote.issues.join(' '));
       if (quote.snapshot !== input.snapshot) throw new CheckoutError(409, 'Giá hoặc giỏ hàng đã thay đổi. Vui lòng cập nhật và kiểm tra lại trước khi đặt hàng.');
       const [result] = await connection.execute(
@@ -80,13 +79,12 @@ export async function createDonHang(req: AuthRequest, res: Response) {
          VALUES (?, ?, ?, ?, ?, ?, 'ChoXacNhan', ?, NOW())`,
         [req.user.ma_tai_khoan, input.ho_ten_nguoi_nhan, input.so_dien_thoai, input.dia_chi_giao_hang, quote.tong_tien, input.phuong_thuc_thanh_toan, input.ghi_chu || null]);
       const orderId = (result as { insertId: number }).insertId;
-      if (quote.voucher_id) await connection.execute('INSERT INTO voucher_su_dung (ma_don_hang, ma_voucher, ma_tai_khoan, code, tam_tinh, tien_giam) VALUES (?, ?, ?, ?, ?, ?)', [orderId, quote.voucher_id, req.user.ma_tai_khoan, quote.ma_giam_gia, quote.tam_tinh, quote.tien_giam]);
       for (const item of items) {
         // thanh_tien is a generated column in MySQL.
         await connection.execute('INSERT INTO chi_tiet_don_hang (ma_don_hang, ma_san_pham, ten_san_pham, so_luong, don_gia) VALUES (?, ?, ?, ?, ?)', [orderId, item.ma_san_pham, item.ten_san_pham, item.so_luong, item.gia_ban]);
         await connection.execute('UPDATE san_pham SET so_luong = so_luong - ? WHERE ma_san_pham = ?', [item.so_luong, item.ma_san_pham]);
       }
-      const response = { ma_giam_gia: quote.ma_giam_gia, tien_giam: quote.tien_giam, ma_don_hang: orderId, tong_tien: quote.tong_tien, phuong_thuc_thanh_toan: input.phuong_thuc_thanh_toan, trang_thai: 'ChoXacNhan' };
+      const response = { ma_don_hang: orderId, tong_tien: quote.tong_tien, phuong_thuc_thanh_toan: input.phuong_thuc_thanh_toan, trang_thai: 'ChoXacNhan' };
       await connection.execute('UPDATE checkout_requests SET response_json = ? WHERE ma_tai_khoan = ? AND request_id = ?', [JSON.stringify(response), req.user.ma_tai_khoan, input.request_id]);
       if (cartId) await connection.execute('DELETE FROM chi_tiet_gio_hang WHERE ma_gio_hang = ?', [cartId]);
       await connection.commit();
