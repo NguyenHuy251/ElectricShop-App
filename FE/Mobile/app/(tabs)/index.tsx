@@ -64,6 +64,7 @@ export default function HomeScreen() {
         </View>
 
         <Link href="/products" asChild><Pressable style={styles.searchBar}><MaterialIcons name="search" size={22} color={shop.muted} /><Text style={styles.searchText}>Bạn đang tìm thiết bị gì?</Text><View style={styles.searchArrow}><MaterialIcons name="tune" size={18} color={shop.primary} /></View></Pressable></Link>
+        <Link href="/vouchers" asChild><Pressable accessibilityRole="button" style={StyleSheet.flatten([styles.searchBar, { marginTop: 12, borderWidth: 1, borderColor: '#CDE4D5' }])}><MaterialIcons name="local-offer" size={24} color="#176B52" /><Text style={styles.searchText}>Mã giảm giá · Khám phá ưu đãi của bạn</Text><MaterialIcons name="chevron-right" size={22} color="#176B52" /></Pressable></Link>
         <View style={styles.hero}>
           <View style={styles.heroCircle} />
           <View style={styles.heroCopy}>

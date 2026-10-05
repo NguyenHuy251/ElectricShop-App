@@ -1,8 +1,9 @@
+import { VoucherList } from '@/components/voucher-list';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { EmptyState, LoadingState, ProductImage } from '../components/shop-ui';
 import { authService } from '../services/auth.service';
@@ -15,18 +16,22 @@ type Attempt = { payload: CheckoutPayload; quote: CheckoutQuote };
 const blank: Form = { ho_ten_nguoi_nhan: '', so_dien_thoai: '', dia_chi_giao_hang: '', ghi_chu: '' };
 
 export default function CheckoutScreen() {
-  const { source, productId, quantity } = useLocalSearchParams<{ source?: string; productId?: string; quantity?: string }>();
+  const { source, productId, quantity, ma_giam_gia } = useLocalSearchParams<{ source?: string; productId?: string; quantity?: string; ma_giam_gia?: string }>();
   const router = useRouter();
   if ((source !== undefined && source !== 'cart' && source !== 'buy_now') || (source !== 'buy_now' && (productId !== undefined || quantity !== undefined)) || (source === 'buy_now' && (!/^\d+$/.test(productId || '') || !Number.isSafeInteger(Number(productId)) || !/^\d+$/.test(quantity || '') || Number(productId) < 1 || Number(quantity) < 1 || Number(quantity) > 999))) {
     return <EmptyState icon="error-outline" title="Thông tin mua hàng không hợp lệ" action="Chọn sản phẩm" onAction={() => router.replace('/products')} />;
   }
-  return <CheckoutContent key={`${source || 'cart'}:${productId}:${quantity}`} initialSelection={source === 'buy_now' ? { source, ma_san_pham: Number(productId), so_luong: Number(quantity) } : {}} />;
+  return <CheckoutContent key={`${source || 'cart'}:${productId}:${quantity}:${ma_giam_gia || ''}`} initialSelection={{ ...(source === 'buy_now' ? { source, ma_san_pham: Number(productId), so_luong: Number(quantity) } : {}), ma_giam_gia }} />;
 }
 
 function CheckoutContent({ initialSelection }: { initialSelection: CheckoutSelection }) {
   const router = useRouter();
   const [selection, setSelection] = useState(initialSelection);
   const activeSelection = useRef(initialSelection);
+  const [voucherInput, setVoucherInput] = useState('');
+  const [voucherOpen, setVoucherOpen] = useState(false);
+  const [voucherBusy, setVoucherBusy] = useState(false);
+  const [voucherError, setVoucherError] = useState('');
   const [form, setForm] = useState<Form>(blank);
   const [quote, setQuote] = useState<CheckoutQuote | null>(null);
   const [loading, setLoading] = useState(true);
@@ -51,24 +56,45 @@ function CheckoutContent({ initialSelection }: { initialSelection: CheckoutSelec
         setSelection(activeSelection.current);
         pending.current = attempt;
         setForm(attempt.payload);
+        activeSelection.current.ma_giam_gia = attempt.payload.ma_giam_gia;
+        setSelection(activeSelection.current);
+        setVoucherInput(attempt.payload.ma_giam_gia || '');
         setQuote(attempt.quote);
         setReview(true);
         setConfirmed(true);
         setUncertain(true);
       } else {
-        const { data } = await orderService.getCheckout(activeSelection.current);
-        setQuote(data);
+        try {
+          const { data } = await orderService.getCheckout(activeSelection.current); setQuote(data);
+        } catch (error) {
+          if (!activeSelection.current.ma_giam_gia) throw error;
+          setVoucherError(getApiMessage(error, 'Mã chưa đủ điều kiện cho đơn này.'));
+          activeSelection.current = { ...activeSelection.current, ma_giam_gia: '' }; setSelection(activeSelection.current);
+          setQuote((await orderService.getCheckout(activeSelection.current)).data);
+        }
         setForm(current => ({ ...current, ho_ten_nguoi_nhan: current.ho_ten_nguoi_nhan || user.ho_ten || '', so_dien_thoai: current.so_dien_thoai || user.so_dien_thoai || '', dia_chi_giao_hang: current.dia_chi_giao_hang || user.dia_chi || '' }));
       }
     }).catch(err => setError(getApiMessage(err, 'Không thể tải thông tin thanh toán.')))
       .finally(() => setLoading(false)), []);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => { void load();  }, [load]);
 
   const change = (key: keyof Form, value: string) => {
     setForm(current => ({ ...current, [key]: value }));
     setFieldErrors(current => ({ ...current, [key]: '' }));
     setConfirmed(false);
+  };
+
+  const applyCode = async (remove = false, chosenCode?: string) => {
+    if (busy.current || uncertain || submitting) return;
+    busy.current = true; setVoucherBusy(true); setVoucherError('');
+    try {
+      const next = { ...selection, ma_giam_gia: remove ? '' : (chosenCode || voucherInput).trim().toUpperCase() };
+      const { data } = await orderService.getCheckout(next);
+      setSelection(next); activeSelection.current = next; setQuote(data);
+      setVoucherInput(next.ma_giam_gia); setVoucherOpen(false); setReview(false); setConfirmed(false);
+    } catch (err) { setVoucherError(getApiMessage(err, 'Không thể áp dụng mã')); }
+    finally { busy.current = false; setVoucherBusy(false); }
   };
 
   const checkForm = async () => {
@@ -139,6 +165,13 @@ function CheckoutContent({ initialSelection }: { initialSelection: CheckoutSelec
 
   return <SafeAreaView style={styles.safe} edges={['bottom']}>
     <KeyboardAvoidingView style={styles.safe} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <Modal visible={voucherOpen} animationType="slide" onRequestClose={() => setVoucherOpen(false)}>
+        <SafeAreaView style={styles.safe}>
+          <View style={[styles.row, { padding: 20 }]}><Text style={styles.sectionTitle}>Chọn mã giảm giá</Text><Pressable accessibilityRole="button" disabled={voucherBusy} onPress={() => setVoucherOpen(false)}><MaterialIcons name="close" size={28} color="#176B52" /></Pressable></View>
+          <VoucherList subtotal={quote.tam_tinh} onSelect={code => { setVoucherInput(code); void applyCode(false, code); }} />
+          {voucherError ? <Text style={[styles.errorText, { padding: 20 }]}>{voucherError}</Text> : null}
+        </SafeAreaView>
+      </Modal>
       <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content}>
         <Text style={styles.eyebrow}>HOÀN TẤT ĐƠN HÀNG</Text>
         <Text style={styles.title}>{review ? 'Kiểm tra lần cuối' : 'Giao đến người bạn thương'}</Text>
@@ -172,7 +205,22 @@ function CheckoutContent({ initialSelection }: { initialSelection: CheckoutSelec
           <View style={styles.notice}><Text style={styles.muted}>Giao hàng tiêu chuẩn · {quote.phi_giao_hang === 0 ? 'Miễn phí giao hàng' : `Phí giao hàng ${formatCurrency(quote.phi_giao_hang)}`}. Cửa hàng sẽ liên hệ xác nhận đơn và thời gian giao phù hợp.</Text></View>
         </View>
         <View style={styles.card}>
+          <Text style={styles.sectionTitle}>Mã giảm giá</Text>
+          <Pressable accessibilityRole="button" disabled={uncertain || checking || submitting || voucherBusy} onPress={() => setVoucherOpen(true)} style={styles.row}>
+            <MaterialIcons name="local-offer" size={24} color="#176B52" />
+            <Text style={[styles.link, { flex: 1 }]}>{quote.ma_giam_gia ? `Đã chọn ${quote.ma_giam_gia}` : 'Chọn mã giảm giá · Xem ưu đãi hiện có'}</Text>
+            <MaterialIcons name="chevron-right" size={24} color="#176B52" />
+          </Pressable>
+          <View style={styles.row}>
+            <TextInput accessibilityLabel="Mã giảm giá" placeholder="Hoặc nhập mã giảm giá" value={voucherInput} onChangeText={setVoucherInput} maxLength={32} autoCapitalize="characters" editable={!uncertain && !checking && !submitting && !voucherBusy} style={[styles.input, { flex: 1 }]} />
+            <Pressable accessibilityRole="button" disabled={uncertain || checking || submitting || voucherBusy} onPress={() => applyCode()}><Text style={styles.link}>{voucherBusy ? 'Đang áp dụng...' : 'Áp dụng'}</Text></Pressable>
+          </View>
+          {quote.ma_giam_gia ? <Pressable accessibilityRole="button" disabled={uncertain || checking || submitting || voucherBusy} onPress={() => applyCode(true)}><Text style={styles.link}>Bỏ mã đang dùng</Text></Pressable> : null}
+          {voucherError ? <Text accessibilityRole="alert" style={styles.errorText}>{voucherError}</Text> : null}
+        </View>
+        <View style={styles.card}>
           <Text style={styles.sectionTitle}>Chi tiết thanh toán</Text>
+          {(quote.tien_giam || 0) > 0 ? <View style={styles.row}><Text style={styles.muted}>Giảm giá ({quote.ma_giam_gia})</Text><Text style={styles.amount}>-{formatCurrency(quote.tien_giam || 0)}</Text></View> : null}
           <View style={styles.row}><Text style={styles.muted}>Tiền hàng</Text><Text style={styles.amount}>{formatCurrency(quote.tam_tinh)}</Text></View>
           <View style={styles.row}><Text style={styles.muted}>Phí giao hàng</Text><Text style={styles.link}>{quote.phi_giao_hang === 0 ? 'Miễn phí' : formatCurrency(quote.phi_giao_hang)}</Text></View>
           <View style={[styles.row, styles.total]}><Text style={styles.name}>Tổng thanh toán khi nhận hàng</Text><Text style={styles.totalAmount}>{formatCurrency(quote.tong_tien)}</Text></View>

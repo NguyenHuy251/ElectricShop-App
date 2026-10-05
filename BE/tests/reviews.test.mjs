@@ -71,6 +71,7 @@ test('order details restore saved reviews for the order owner', async () => {
   pool.query = async (sql, args) => {
     if (sql.includes('sp_don_hang_get_by_id')) return [[[{ ma_don_hang: 12, ma_tai_khoan: 4 }], [{ ma_san_pham: 7 }]]];
     if (sql.includes('FROM chi_tiet_don_hang')) return [[{ ma_san_pham: 7 }]];
+    if (sql.includes('FROM voucher_su_dung')) return [[]];
     assert.match(sql, /FROM danh_gia/); assert.deepEqual(args, [4]);
     return [[{ ma_danh_gia: 9, ma_san_pham: 7, so_sao: 5, noi_dung: 'Rất tốt' }]];
   };

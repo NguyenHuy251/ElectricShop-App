@@ -1,3 +1,4 @@
+import voucherRoutes from './routes/voucher.routes.js';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import express from 'express';
@@ -55,6 +56,7 @@ app.use('/api/thong-so', thongSoRoutes);
 app.use('/api/specifications', thongSoRoutes);
 app.use('/api/gio-hang', gioHangRoutes);
 app.use('/api/don-hang', donHangRoutes);
+app.use('/api/voucher', voucherRoutes);
 app.use('/api/danh-gia', danhGiaRoutes);
 app.use('/api/lien-he', lienHeRoutes);
 app.use('/api/dashboard', dashboardRoutes);

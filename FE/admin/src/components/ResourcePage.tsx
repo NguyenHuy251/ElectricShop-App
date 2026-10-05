@@ -8,9 +8,9 @@ import { errorMessage, fieldErrors } from '../utils/errors';
 import LoadError from './LoadError';
 import { dateTime, money } from '../utils/format';
 
-export interface Field { name: string; label: string; kind?: 'number' | 'text' | 'textarea' | 'select' | 'switch' | 'date'; required?: boolean; rules?: Rule[]; options?: { value: string | number; label: string; disabled?: boolean }[]; disabledOnEdit?: boolean }
+export interface Field { name: string; label: string; kind?: 'number' | 'text' | 'textarea' | 'select' | 'switch' | 'date' | 'datetime'; required?: boolean; rules?: Rule[]; options?: { value: string | number; label: string; disabled?: boolean }[]; disabledOnEdit?: boolean }
 interface Props<T extends object> {
-  title: string; idKey: keyof T & string; api: { list: () => Promise<ApiResponse<T[]>>; get: (id: number) => Promise<T>; create?: (data: Partial<T>) => Promise<unknown>; update: (id: number, data: Partial<T>) => Promise<unknown>; remove: (id: number) => Promise<unknown> };
+  title: string; idKey: keyof T & string; api: { list: () => Promise<ApiResponse<T[]>>; get: (id: number) => Promise<T>; create?: (data: Partial<T>) => Promise<unknown>; update: (id: number, data: Partial<T>) => Promise<unknown>; remove?: (id: number) => Promise<unknown> };
   columns: ColumnsType<T>; fields: Field[]; defaults?: Partial<T>; searchKeys: (keyof T)[];
   filter?: { key: keyof T; options: { value: string; label: string }[]; initial?: string };
   canModify?: (row: T) => boolean; prepare?: (row: T) => Partial<T>; details?: (row: T) => ReactNode; extra?: ReactNode;
@@ -36,7 +36,7 @@ export default function ResourcePage<T extends object>({ title, idKey, api, colu
   };
   const remove = (row: T) => modal.confirm({ title: 'Xác nhận xóa?', content: 'Dữ liệu bị xóa không thể khôi phục.', okText: 'Xóa', cancelText: 'Hủy', okButtonProps: { danger: true }, onOk: async () => {
     if (lock.current) throw new Error('Đang xử lý'); lock.current = true; setBusy(true);
-    try { await api.remove(id(row)); message.success('Đã xóa thành công'); await reload(); }
+    try { await api.remove?.(id(row)); message.success('Đã xóa thành công'); await reload(); }
     catch (e) { message.error(errorMessage(e)); throw e; } finally { lock.current = false; setBusy(false); }
   } });
   const rows = (data?.data || []).filter(row => (!filterValue || !filter || String(row[filter.key]) === filterValue) && searchKeys.some(key => String(row[key] ?? '').toLocaleLowerCase('vi').includes(search.toLocaleLowerCase('vi'))));
@@ -50,7 +50,7 @@ export default function ResourcePage<T extends object>({ title, idKey, api, colu
         try { if (editing) await api.update(id(editing), values); else await api.create?.(values); message.success('Đã lưu thành công'); setOpen(false); await reload(); }
         catch (e) { fieldErrors(e, form); message.error(errorMessage(e)); } finally { lock.current = false; setBusy(false); }
       }}><div className="form-grid">{fields.map(field => <Form.Item key={field.name} name={field.name} label={field.label} valuePropName={field.kind === 'switch' ? 'checked' : 'value'} rules={[...(field.required ? [{ required: true, message: `Vui lòng nhập ${field.label.toLowerCase()}` }] : []), ...(field.rules || [])]}>
-        {field.kind === 'select' ? <Select allowClear={!field.required} showSearch optionFilterProp="label" options={field.options} disabled={busy || (!!editing && field.disabledOnEdit)} /> : field.kind === 'number' ? <InputNumber min={0} style={{ width: '100%' }} /> : field.kind === 'switch' ? <Switch /> : field.kind === 'textarea' ? <Input.TextArea rows={3} /> : <Input type={field.kind === 'date' ? 'date' : 'text'} disabled={busy || (!!editing && field.disabledOnEdit)} />}
+        {field.kind === 'select' ? <Select allowClear={!field.required} showSearch optionFilterProp="label" options={field.options} disabled={busy || (!!editing && field.disabledOnEdit)} /> : field.kind === 'number' ? <InputNumber min={0} style={{ width: '100%' }} /> : field.kind === 'switch' ? <Switch /> : field.kind === 'textarea' ? <Input.TextArea rows={3} /> : <Input type={field.kind === 'datetime' ? 'datetime-local' : field.kind === 'date' ? 'date' : 'text'} disabled={busy || (!!editing && field.disabledOnEdit)} />}
       </Form.Item>)}</div></Form>
     </Modal><Drawer title="Thông tin chi tiết" open={!!detail} onClose={() => setDetail(null)} width={Math.min(640, window.innerWidth)}>{detail && (details ? details(detail) : <Descriptions column={1} bordered items={fields.map(field => {
       const value = (detail as Record<string, unknown>)[field.name];
