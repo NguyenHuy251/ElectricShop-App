@@ -16,9 +16,10 @@ import {
   Space,
   Table,
   Tag,
+  Tooltip,
   Typography,
 } from 'antd';
-import { DeleteOutlined, PlusOutlined, StarFilled, StarOutlined } from '@ant-design/icons';
+import { DeleteOutlined, EditOutlined, EyeOutlined, PlusOutlined, StarFilled, StarOutlined } from '@ant-design/icons';
 import { productApi } from '../api/product.api';
 import { categoryApi } from '../api/category.api';
 import { brandApi } from '../api/brand.api';
@@ -26,9 +27,20 @@ import { useLoad } from '../hooks/useLoad';
 import LoadError from '../components/LoadError';
 import { errorMessage, fieldErrors } from '../utils/errors';
 import { money, options, Status } from '../utils/format';
-import type { CategorySpecification, Product, ProductImage, ProductInput } from '../types';
+import type { CategorySpecification, Product, ProductImage, ProductInput, ProductVariant } from '../types';
 
 const { Text } = Typography;
+
+function generatedVariantSku(productCode: string, variantName: string, index: number) {
+  const suffix = variantName
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd').replace(/Đ/g, 'D')
+    .replace(/[^a-zA-Z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .toUpperCase() || `VARIANT-${index + 1}`;
+  return `${productCode.trim().toUpperCase()}-${suffix}`.slice(0, 80);
+}
 
 export default function ProductsPage() {
   const { message, modal } = App.useApp();
@@ -51,6 +63,7 @@ export default function ProductsPage() {
 
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<number | null>(null);
+  const [variantMode, setVariantMode] = useState(false);
   const [busy, setBusy] = useState(false);
   const lock = useRef(false);
   const [form] = Form.useForm<any>();
@@ -63,6 +76,7 @@ export default function ProductsPage() {
   const [images, setImages] = useState<ProductImage[]>([]);
   const [newImageUrl, setNewImageUrl] = useState('');
   const [newImageDesc, setNewImageDesc] = useState('');
+  const [variants, setVariants] = useState<ProductVariant[]>([]);
 
   // View detail modal
   const [detailProduct, setDetailProduct] = useState<Product | null>(null);
@@ -174,14 +188,38 @@ export default function ProductsPage() {
           ? [{ duong_dan: product.hinh_anh, la_anh_chinh: true, thu_tu_hien_thi: 1 }]
           : [];
       setImages(imgList);
+      setVariants((product.variants || []).map(variant => ({ ...variant, gia_ban: Number(variant.gia_ban), so_luong: Number(variant.so_luong) })));
 
       setEditing(row.ma_san_pham);
+      setVariantMode(false);
       setOpen(true);
 
       // Load specifications for category and prefill
       if (product.ma_danh_muc) {
         await loadSpecsForCategory(product.ma_danh_muc, product.thong_so_ky_thuat);
       }
+    } catch (e) {
+      message.error(errorMessage(e));
+    } finally {
+      lock.current = false;
+      setBusy(false);
+    }
+  };
+
+  const addVariant = async (row: Product) => {
+    if (lock.current) return;
+    lock.current = true;
+    setBusy(true);
+    try {
+      const product = await productApi.get(row.ma_san_pham);
+      form.resetFields();
+      form.setFieldsValue({ ...product, gia_ban: Number(product.gia_ban), gia_nhap: Number(product.gia_nhap || 0) });
+      setImages(product.danh_sach_hinh_anh?.length ? product.danh_sach_hinh_anh : product.hinh_anh ? [{ duong_dan: product.hinh_anh, la_anh_chinh: true, thu_tu_hien_thi: 1 }] : []);
+      setVariants([...(product.variants || []), { ma_sku: '', ten_bien_the: '', gia_ban: Number(product.gia_ban), so_luong: 0, trang_thai: 'DangBan' }]);
+      setEditing(row.ma_san_pham);
+      setVariantMode(true);
+      setOpen(true);
+      if (product.ma_danh_muc) await loadSpecsForCategory(product.ma_danh_muc, product.thong_so_ky_thuat);
     } catch (e) {
       message.error(errorMessage(e));
     } finally {
@@ -279,6 +317,10 @@ export default function ProductsPage() {
           thu_tu_hien_thi: idx + 1,
         })),
         thong_so: thong_so as any,
+        variants: variants.map((variant, index) => ({
+          ...variant,
+          ma_sku: variant.ma_sku || generatedVariantSku(values.ma_san_pham_code, variant.ten_bien_the, index),
+        })),
       };
 
       if (editing) {
@@ -312,7 +354,9 @@ export default function ProductsPage() {
             form.setFieldsValue({ trang_thai: 'DangBan', gia_nhap: 0, so_luong: 0, bao_hanh: 12 });
             setCategorySpecs([]);
             setImages([]);
+            setVariants([]);
             setEditing(null);
+            setVariantMode(false);
             setOpen(true);
           }}
         >
@@ -404,14 +448,11 @@ export default function ProductsPage() {
               title: 'Thao tác',
               render: (_, row) => (
                 <Space>
-                  <Button onClick={() => viewDetail(row)}>Xem</Button>
                   <ProductVariants product={row} />
-                  <Button disabled={busy} onClick={() => edit(row)}>
-                    Sửa
-                  </Button>
-                  <Button danger disabled={busy} onClick={() => remove(row)}>
-                    Xóa
-                  </Button>
+                  <Tooltip title="Xem chi tiết"><Button aria-label="Xem chi tiết" icon={<EyeOutlined />} onClick={() => viewDetail(row)} /></Tooltip>
+                  <Tooltip title="Thêm biến thể"><Button aria-label="Thêm biến thể" disabled={busy} icon={<PlusOutlined />} onClick={() => addVariant(row)} /></Tooltip>
+                  <Tooltip title="Sửa sản phẩm"><Button aria-label="Sửa sản phẩm" disabled={busy} icon={<EditOutlined />} onClick={() => edit(row)} /></Tooltip>
+                  <Tooltip title="Xóa sản phẩm"><Button danger aria-label="Xóa sản phẩm" disabled={busy} icon={<DeleteOutlined />} onClick={() => remove(row)} /></Tooltip>
                 </Space>
               ),
             },
@@ -495,13 +536,32 @@ export default function ProductsPage() {
             ) : (
               <Empty description="Chưa có thông số kỹ thuật" />
             )}
+
+            <h4 style={{ marginTop: 22 }}>Biến thể sản phẩm</h4>
+            {detailProduct.variants && detailProduct.variants.length > 0 ? (
+              <Table
+                size="small"
+                rowKey={variant => variant.ma_bien_the || variant.ma_sku}
+                dataSource={detailProduct.variants}
+                pagination={false}
+                columns={[
+                  { title: 'Tên biến thể', dataIndex: 'ten_bien_the' },
+                  { title: 'SKU', dataIndex: 'ma_sku' },
+                  { title: 'Giá bán', dataIndex: 'gia_ban', render: money },
+                  { title: 'Tồn kho', dataIndex: 'so_luong' },
+                  { title: 'Trạng thái', dataIndex: 'trang_thai', render: value => <Status value={value} /> },
+                ]}
+              />
+            ) : (
+              <Text type="secondary">Sản phẩm này chưa có biến thể riêng.</Text>
+            )}
           </div>
         )}
       </Modal>
 
       {/* Modal Add / Edit Product */}
       <Modal
-        title={editing ? 'Chỉnh sửa sản phẩm' : 'Thêm sản phẩm'}
+        title={variantMode ? 'Thêm biến thể sản phẩm' : editing ? 'Chỉnh sửa sản phẩm' : 'Thêm sản phẩm'}
         open={open}
         width={850}
         onCancel={() => {
@@ -517,10 +577,10 @@ export default function ProductsPage() {
           <Divider orientation="left">Thông tin cơ bản</Divider>
           <div className="form-grid">
             <Form.Item name="ma_san_pham_code" label="Mã sản phẩm" rules={[{ required: true, whitespace: true, message: 'Nhập mã sản phẩm' }]}>
-              <Input placeholder="VD: TL-SAM-001" />
+              <Input placeholder="VD: TL-SAM-001" disabled={variantMode} />
             </Form.Item>
             <Form.Item name="ten_san_pham" label="Tên sản phẩm" rules={[{ required: true, whitespace: true, message: 'Nhập tên sản phẩm' }]}>
-              <Input placeholder="VD: Tủ lạnh Samsung Inverter 236L" />
+              <Input placeholder="VD: Tủ lạnh Samsung Inverter 236L" disabled={variantMode} />
             </Form.Item>
             <Form.Item name="ma_danh_muc" label="Danh mục" rules={[{ required: true, message: 'Chọn danh mục' }]}>
               <Select
@@ -529,6 +589,7 @@ export default function ProductsPage() {
                 placeholder="Chọn danh mục"
                 options={references.data?.categories.map(c => ({ value: c.ma_danh_muc, label: c.ten_danh_muc }))}
                 onChange={handleCategoryChange}
+                disabled={variantMode}
               />
             </Form.Item>
             <Form.Item name="ma_thuong_hieu" label="Thương hiệu" rules={[{ required: true, message: 'Chọn thương hiệu' }]}>
@@ -537,27 +598,28 @@ export default function ProductsPage() {
                 optionFilterProp="label"
                 placeholder="Chọn thương hiệu"
                 options={references.data?.brands.map(b => ({ value: b.ma_thuong_hieu, label: b.ten_thuong_hieu }))}
+                disabled={variantMode}
               />
             </Form.Item>
             <Form.Item name="gia_nhap" label="Giá nhập (VNĐ)" rules={[{ required: true, type: 'number', min: 0, message: 'Nhập số hợp lệ' }]}>
-              <InputNumber min={0} precision={0} style={{ width: '100%' }} placeholder="Giá nhập kho" />
+              <InputNumber min={0} precision={0} style={{ width: '100%' }} placeholder="Giá nhập kho" disabled={variantMode} />
             </Form.Item>
             <Form.Item name="gia_ban" label="Giá bán (VNĐ)" rules={[{ required: true, type: 'number', min: 1, message: 'Nhập giá bán > 0' }]}>
-              <InputNumber min={1} precision={0} style={{ width: '100%' }} placeholder="Giá niêm yết" />
+              <InputNumber min={1} precision={0} style={{ width: '100%' }} placeholder="Giá niêm yết" disabled={variantMode} />
             </Form.Item>
             <Form.Item name="so_luong" label="Số lượng tồn kho" rules={[{ required: true, type: 'number', min: 0, message: 'Nhập số lượng >= 0' }]}>
-              <InputNumber min={0} precision={0} style={{ width: '100%' }} />
+              <InputNumber min={0} precision={0} style={{ width: '100%' }} disabled={variantMode} />
             </Form.Item>
             <Form.Item name="bao_hanh" label="Bảo hành (tháng)" rules={[{ required: true, type: 'number', min: 0, message: 'Nhập số tháng' }]}>
-              <InputNumber min={0} precision={0} style={{ width: '100%' }} />
+              <InputNumber min={0} precision={0} style={{ width: '100%' }} disabled={variantMode} />
             </Form.Item>
             <Form.Item name="trang_thai" label="Trạng thái" rules={[{ required: true }]}>
-              <Select options={options(['DangBan', 'HetHang', 'NgungBan'])} />
+              <Select options={options(['DangBan', 'HetHang', 'NgungBan'])} disabled={variantMode} />
             </Form.Item>
           </div>
 
           <Form.Item name="mo_ta" label="Mô tả sản phẩm">
-            <Input.TextArea rows={3} placeholder="Mô tả ngắn gọn về tính năng và ưu điểm của sản phẩm..." />
+            <Input.TextArea rows={3} placeholder="Mô tả ngắn gọn về tính năng và ưu điểm của sản phẩm..." disabled={variantMode} />
           </Form.Item>
 
           {/* Multi-Image Section */}
@@ -633,6 +695,26 @@ export default function ProductsPage() {
                 Chưa có hình ảnh nào. Vui lòng nhập URL và nhấn "Thêm ảnh".
               </div>
             )}
+          </div>
+
+          <Divider orientation="left">Biến thể sản phẩm</Divider>
+          <div style={{ display: 'grid', gap: 10, marginBottom: 18 }}>
+            {variants.map((variant, index) => (
+              <Card key={index} size="small" style={{ background: '#fafcfa' }}>
+                <Text strong style={{ display: 'block', marginBottom: 10 }}>Biến thể {index + 1}</Text>
+                <Space wrap style={{ width: '100%' }} align="start">
+                  <label><Text type="secondary" style={{ display: 'block', fontSize: 12 }}>Tên biến thể</Text><Input placeholder="VD: Màu đen" value={variant.ten_bien_the} onChange={e => setVariants(current => current.map((item, i) => i === index ? { ...item, ten_bien_the: e.target.value } : item))} style={{ width: 220 }} /></label>
+                  <label><Text type="secondary" style={{ display: 'block', fontSize: 12 }}>Giá bán</Text><InputNumber min={1} precision={0} placeholder="Giá bán" value={Number(variant.gia_ban)} onChange={value => setVariants(current => current.map((item, i) => i === index ? { ...item, gia_ban: Number(value || 0) } : item))} addonAfter="đ" /></label>
+                  <label><Text type="secondary" style={{ display: 'block', fontSize: 12 }}>Tồn kho</Text><InputNumber min={0} precision={0} placeholder="Tồn kho" value={Number(variant.so_luong)} onChange={value => setVariants(current => current.map((item, i) => i === index ? { ...item, so_luong: Number(value || 0) } : item))} /></label>
+                  <label><Text type="secondary" style={{ display: 'block', fontSize: 12 }}>Trạng thái</Text><Select value={variant.trang_thai} options={options(['DangBan', 'HetHang', 'NgungBan'])} onChange={value => setVariants(current => current.map((item, i) => i === index ? { ...item, trang_thai: value } : item))} style={{ width: 130 }} /></label>
+                  <Tooltip title="Xóa biến thể"><Button danger type="text" aria-label="Xóa biến thể" icon={<DeleteOutlined />} onClick={() => setVariants(current => current.filter((_, i) => i !== index))} style={{ marginTop: 20 }} /></Tooltip>
+                </Space>
+              </Card>
+            ))}
+            <Button type="dashed" icon={<PlusOutlined />} onClick={() => setVariants(current => [...current, { ma_sku: '', ten_bien_the: '', gia_ban: 0, so_luong: 0, trang_thai: 'DangBan' }])}>
+              Thêm biến thể
+            </Button>
+            {!variants.length ? <Text type="secondary">Chưa có biến thể. Sản phẩm sẽ dùng giá và tồn kho chung.</Text> : null}
           </div>
 
           {/* Dynamic Specifications by Category */}

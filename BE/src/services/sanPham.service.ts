@@ -41,6 +41,26 @@ export function normalizeProductRow(row: any): Product {
   };
 }
 
+export async function replaceProductVariants(productId: number, variants: { ma_sku: string; ten_bien_the: string; gia_ban: number; so_luong: number; trang_thai: string }[]) {
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    await connection.execute('DELETE FROM san_pham_bien_the WHERE ma_san_pham = ?', [productId]);
+    for (const variant of variants) {
+      await connection.execute(
+        'INSERT INTO san_pham_bien_the (ma_san_pham, ma_sku, ten_bien_the, gia_ban, so_luong, trang_thai) VALUES (?, ?, ?, ?, ?, ?)',
+        [productId, variant.ma_sku, variant.ten_bien_the, variant.gia_ban, variant.so_luong, variant.trang_thai],
+      );
+    }
+    await connection.commit();
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
 export async function listSanPham(params: unknown[]) {
   const resultSets = await callProcedure(sanPhamProcedures.list, params);
   const count = firstResult<{ total: number }>(resultSets);

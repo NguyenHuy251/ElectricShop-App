@@ -224,6 +224,7 @@ export async function createSanPham(req: Request, res: Response) {
       trang_thai,
       thong_so,
       specifications,
+      variants,
     } = req.body;
 
     if (!ma_danh_muc || !ma_thuong_hieu || !ma_san_pham_code || !ten_san_pham || !gia_ban) {
@@ -308,6 +309,7 @@ export async function updateSanPham(req: Request, res: Response) {
       trang_thai,
       thong_so,
       specifications,
+      variants,
     } = req.body;
 
     const existingProductData = await sanPhamService.getSanPhamById(id);
@@ -375,6 +377,21 @@ export async function updateSanPham(req: Request, res: Response) {
       ],
       allImages.length > 0 ? allImages : undefined
     );
+    if (variants !== undefined) {
+      if (!Array.isArray(variants)) return sendError(res, 400, 'Danh sách biến thể không hợp lệ');
+      const normalizedVariants = variants.map((variant: any) => ({
+        ma_sku: String(variant.ma_sku || '').trim(),
+        ten_bien_the: String(variant.ten_bien_the || '').trim(),
+        gia_ban: Number(variant.gia_ban),
+        so_luong: Number(variant.so_luong),
+        trang_thai: variant.trang_thai || 'DangBan',
+      }));
+      if (normalizedVariants.some(variant => !variant.ma_sku || !variant.ten_bien_the || !Number.isFinite(variant.gia_ban) || variant.gia_ban <= 0 || !Number.isInteger(variant.so_luong) || variant.so_luong < 0 || !['DangBan', 'HetHang', 'NgungBan'].includes(variant.trang_thai))) {
+        return sendError(res, 400, 'Thông tin biến thể không hợp lệ');
+      }
+      if (new Set(normalizedVariants.map(variant => variant.ma_sku)).size !== normalizedVariants.length) return sendError(res, 409, 'SKU biến thể không được trùng nhau');
+      await sanPhamService.replaceProductVariants(id, normalizedVariants);
+    }
 
     return sendSuccess(res, 'Cập nhật sản phẩm thành công', { ma_san_pham: id });
   } catch (error) {
