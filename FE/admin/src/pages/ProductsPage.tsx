@@ -41,6 +41,10 @@ function generatedVariantSku(productCode: string, variantName: string, index: nu
   return `${productCode.trim().toUpperCase()}-${suffix}`.slice(0, 80);
 }
 
+function variantSpecValue(variant: ProductVariant, specId: number) {
+  return variant.thong_so_ky_thuat?.find(spec => spec.ma_thong_so === specId)?.gia_tri ?? '';
+}
+
 export default function ProductsPage() {
   const { message, modal } = App.useApp();
   const [query, setQuery] = useState({
@@ -187,7 +191,7 @@ export default function ProductsPage() {
           ? [{ duong_dan: product.hinh_anh, la_anh_chinh: true, thu_tu_hien_thi: 1 }]
           : [];
       setImages(imgList);
-      setVariants((product.variants || []).map(variant => ({ ...variant, gia_ban: Number(variant.gia_ban), so_luong: Number(variant.so_luong) })));
+      setVariants((product.variants || []).map(variant => ({ ...variant, gia_ban: Number(variant.gia_ban), so_luong: Number(variant.so_luong), thong_so_ky_thuat: variant.thong_so_ky_thuat || [] })));
 
       setEditing(row.ma_san_pham);
       setVariantMode(false);
@@ -214,7 +218,7 @@ export default function ProductsPage() {
       form.resetFields();
       form.setFieldsValue({ ...product, gia_ban: Number(product.gia_ban), gia_nhap: Number(product.gia_nhap || 0) });
       setImages(product.danh_sach_hinh_anh?.length ? product.danh_sach_hinh_anh : product.hinh_anh ? [{ duong_dan: product.hinh_anh, la_anh_chinh: true, thu_tu_hien_thi: 1 }] : []);
-      setVariants([...(product.variants || []), { ma_sku: '', ten_bien_the: '', gia_ban: Number(product.gia_ban), so_luong: 0, trang_thai: 'DangBan' }]);
+      setVariants([...(product.variants || []), { ma_sku: '', ten_bien_the: '', gia_ban: Number(product.gia_ban), so_luong: 0, trang_thai: 'DangBan', thong_so_ky_thuat: [] }]);
       setEditing(row.ma_san_pham);
       setVariantMode(true);
       setOpen(true);
@@ -464,6 +468,9 @@ export default function ProductsPage() {
         open={detailOpen}
         onCancel={() => setDetailOpen(false)}
         footer={[
+          <Button key="edit-variants" icon={<EditOutlined />} onClick={() => { setDetailOpen(false); if (detailProduct) void edit(detailProduct); }}>
+            Sửa biến thể
+          </Button>,
           <Button key="close" onClick={() => setDetailOpen(false)}>
             Đóng
           </Button>,
@@ -572,6 +579,7 @@ export default function ProductsPage() {
         cancelButtonProps={{ disabled: busy }}
       >
         <Form form={form} layout="vertical" disabled={busy} onFinish={handleSubmit}>
+          <div style={{ display: variantMode ? 'none' : undefined }}>
           <Divider orientation="left">Thông tin cơ bản</Divider>
           <div className="form-grid">
             <Form.Item name="ma_san_pham_code" label="Mã sản phẩm" rules={[{ required: true, whitespace: true, message: 'Nhập mã sản phẩm' }]}>
@@ -695,6 +703,8 @@ export default function ProductsPage() {
             )}
           </div>
 
+          </div>
+
           <Divider orientation="left">Biến thể sản phẩm</Divider>
           <div style={{ display: 'grid', gap: 10, marginBottom: 18 }}>
             {variants.map((variant, index) => (
@@ -702,19 +712,32 @@ export default function ProductsPage() {
                 <Text strong style={{ display: 'block', marginBottom: 10 }}>Biến thể {index + 1}</Text>
                 <Space wrap style={{ width: '100%' }} align="start">
                   <label><Text type="secondary" style={{ display: 'block', fontSize: 12 }}>Tên biến thể</Text><Input placeholder="VD: Màu đen" value={variant.ten_bien_the} onChange={e => setVariants(current => current.map((item, i) => i === index ? { ...item, ten_bien_the: e.target.value } : item))} style={{ width: 220 }} /></label>
-                  <label><Text type="secondary" style={{ display: 'block', fontSize: 12 }}>Giá bán</Text><InputNumber min={1} precision={0} placeholder="Giá bán" value={Number(variant.gia_ban)} onChange={value => setVariants(current => current.map((item, i) => i === index ? { ...item, gia_ban: Number(value || 0) } : item))} addonAfter="đ" /></label>
-                  <label><Text type="secondary" style={{ display: 'block', fontSize: 12 }}>Tồn kho</Text><InputNumber min={0} precision={0} placeholder="Tồn kho" value={Number(variant.so_luong)} onChange={value => setVariants(current => current.map((item, i) => i === index ? { ...item, so_luong: Number(value || 0) } : item))} /></label>
-                  <label><Text type="secondary" style={{ display: 'block', fontSize: 12 }}>Trạng thái</Text><Select value={variant.trang_thai} options={options(['DangBan', 'HetHang', 'NgungBan'])} onChange={value => setVariants(current => current.map((item, i) => i === index ? { ...item, trang_thai: value } : item))} style={{ width: 130 }} /></label>
+                  <label><Text type="secondary" style={{ display: 'block', fontSize: 12 }}>Giá bán</Text><InputNumber min={1} precision={0} placeholder="VD: 1290000" value={Number(variant.gia_ban)} onChange={value => setVariants(current => current.map((item, i) => i === index ? { ...item, gia_ban: Number(value || 0) } : item))} addonAfter="đ" /></label>
+                  <label><Text type="secondary" style={{ display: 'block', fontSize: 12 }}>Tồn kho</Text><InputNumber min={0} precision={0} placeholder="VD: 12" value={Number(variant.so_luong)} onChange={value => setVariants(current => current.map((item, i) => i === index ? { ...item, so_luong: Number(value || 0) } : item))} /></label>
+                  <label><Text type="secondary" style={{ display: 'block', fontSize: 12 }}>Trạng thái</Text><Select value={variant.trang_thai} placeholder="Chọn trạng thái" options={options(['DangBan', 'HetHang', 'NgungBan'])} onChange={value => setVariants(current => current.map((item, i) => i === index ? { ...item, trang_thai: value } : item))} style={{ width: 130 }} /></label>
                   <Tooltip title="Xóa biến thể"><Button danger type="text" aria-label="Xóa biến thể" icon={<DeleteOutlined />} onClick={() => setVariants(current => current.filter((_, i) => i !== index))} style={{ marginTop: 20 }} /></Tooltip>
                 </Space>
+                {categorySpecs.length > 0 ? <div style={{ marginTop: 12 }}><Text strong style={{ display: 'block', marginBottom: 8 }}>Thông số kỹ thuật của biến thể</Text><div className="form-grid">{categorySpecs.map(spec => {
+                  const value = variantSpecValue(variant, spec.ma_thong_so);
+                  const update = (raw: unknown) => setVariants(current => current.map((item, i) => {
+                    if (i !== index) return item;
+                    const specs = [...(item.thong_so_ky_thuat || [])].filter(itemSpec => itemSpec.ma_thong_so !== spec.ma_thong_so);
+                    if (raw === undefined || raw === null || String(raw).trim() === '') return { ...item, thong_so_ky_thuat: specs };
+                    const textValue = String(raw).trim();
+                    specs.push({ ma_thong_so: spec.ma_thong_so, ten_thong_so: spec.ten_thong_so, ten_nhom: spec.ten_nhom_thong_so, kieu_du_lieu: spec.kieu_du_lieu, don_vi: spec.don_vi, gia_tri: textValue, gia_tri_so: spec.kieu_du_lieu === 'NUMBER' ? Number(raw) : null, gia_tri_bool: spec.kieu_du_lieu === 'BOOLEAN' ? raw === 'true' : null });
+                    return { ...item, thong_so_ky_thuat: specs };
+                  }));
+                  return <label key={spec.ma_thong_so}><Text type="secondary" style={{ display: 'block', fontSize: 12 }}>{spec.ten_thong_so}{spec.don_vi ? ` (${spec.don_vi})` : ''}</Text>{spec.kieu_du_lieu === 'NUMBER' ? <InputNumber placeholder={`VD: 120${spec.don_vi ? ` ${spec.don_vi}` : ''}`} value={value ? Number(value) : undefined} onChange={update} style={{ width: '100%' }} /> : spec.kieu_du_lieu === 'BOOLEAN' ? <Select value={value || undefined} allowClear placeholder="Chọn Có hoặc Không" options={[{ value: 'true', label: 'Có' }, { value: 'false', label: 'Không' }]} onChange={update} style={{ width: '100%' }} /> : <Input value={value} placeholder={spec.kieu_du_lieu === 'OPTION' ? 'VD: Màu đen hoặc 3 cánh' : 'Nhập thông số'} onChange={event => update(event.target.value)} />}</label>;
+                })}</div></div> : null}
               </Card>
             ))}
-            <Button type="dashed" icon={<PlusOutlined />} onClick={() => setVariants(current => [...current, { ma_sku: '', ten_bien_the: '', gia_ban: 0, so_luong: 0, trang_thai: 'DangBan' }])}>
+            <Button type="dashed" icon={<PlusOutlined />} onClick={() => setVariants(current => [...current, { ma_sku: '', ten_bien_the: '', gia_ban: 0, so_luong: 0, trang_thai: 'DangBan', thong_so_ky_thuat: [] }])}>
               Thêm biến thể
             </Button>
             {!variants.length ? <Text type="secondary">Chưa có biến thể. Sản phẩm sẽ dùng giá và tồn kho chung.</Text> : null}
           </div>
 
+          <div style={{ display: variantMode ? 'none' : undefined }}>
           {/* Dynamic Specifications by Category */}
           <Divider orientation="left">
             Thông số kỹ thuật {categorySpecs.length > 0 ? `(${categorySpecs.length} thông số theo danh mục)` : ''}
@@ -775,6 +798,7 @@ export default function ProductsPage() {
               Vui lòng chọn danh mục để tự động tải các thông số kỹ thuật tương ứng.
             </div>
           )}
+          </div>
         </Form>
       </Modal>
     </>

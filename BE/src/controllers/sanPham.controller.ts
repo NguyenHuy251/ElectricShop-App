@@ -186,7 +186,13 @@ export async function getSanPhamById(req: Request, res: Response) {
     }
 
     const { product, categorySpecs } = data;
-    const [variantRows] = await pool.query('SELECT ma_bien_the, ma_san_pham, ma_sku, ten_bien_the, gia_ban, so_luong, trang_thai FROM san_pham_bien_the WHERE ma_san_pham = ? ORDER BY ma_bien_the', [id]);
+    const [variantRows] = await pool.query('SELECT ma_bien_the, ma_san_pham, ma_sku, ten_bien_the, gia_ban, so_luong, trang_thai, thong_so_json FROM san_pham_bien_the WHERE ma_san_pham = ? ORDER BY ma_bien_the', [id]);
+    const variants = (variantRows as any[]).map(variant => ({
+      ...variant,
+      thong_so_ky_thuat: variant.thong_so_json
+        ? (typeof variant.thong_so_json === 'string' ? JSON.parse(variant.thong_so_json) : variant.thong_so_json)
+        : [],
+    }));
     const specifications = groupSpecifications(product.thong_so_ky_thuat || []);
     const images = product.danh_sach_hinh_anh || [];
 
@@ -196,7 +202,7 @@ export async function getSanPhamById(req: Request, res: Response) {
       images,
       specifications,
       category_specifications: categorySpecs || [],
-      variants: variantRows,
+      variants,
     };
 
     return sendSuccess(res, 'Sản phẩm được tìm thấy', fullResponse);
@@ -382,6 +388,7 @@ export async function updateSanPham(req: Request, res: Response) {
         gia_ban: Number(variant.gia_ban),
         so_luong: Number(variant.so_luong),
         trang_thai: variant.trang_thai || 'DangBan',
+        thong_so_ky_thuat: Array.isArray(variant.thong_so_ky_thuat) ? variant.thong_so_ky_thuat : [],
       }));
       if (normalizedVariants.some(variant => !variant.ma_sku || !variant.ten_bien_the || !Number.isFinite(variant.gia_ban) || variant.gia_ban <= 0 || !Number.isInteger(variant.so_luong) || variant.so_luong < 0 || !['DangBan', 'HetHang', 'NgungBan'].includes(variant.trang_thai))) {
         return sendError(res, 400, 'Thông tin biến thể không hợp lệ');

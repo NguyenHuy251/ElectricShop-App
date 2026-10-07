@@ -128,6 +128,7 @@ export interface ProductVariant {
   gia_ban: number | string;
   so_luong: number;
   trang_thai: 'DangBan' | 'HetHang' | 'NgungBan';
+  thong_so_ky_thuat?: ProductSpecification[];
 }
 
 export interface ProductInput {
