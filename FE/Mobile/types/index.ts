@@ -73,6 +73,15 @@ export interface Product {
   specifications?: GroupedSpecification[];
   images?: ProductImage[];
   variants?: ProductVariant[];
+  category_specifications?: CategorySpecification[];
+}
+
+export interface CategorySpecification {
+  ma_thong_so: number;
+  ten_thong_so: string;
+  kieu_du_lieu?: string;
+  don_vi?: string | null;
+  cho_phep_loc?: boolean;
 }
 
 export interface ProductVariant {
@@ -83,6 +92,7 @@ export interface ProductVariant {
   gia_ban: number | string;
   so_luong: number;
   trang_thai: 'DangBan' | 'HetHang' | 'NgungBan';
+  thong_so_ky_thuat?: ProductSpecification[];
 }
 
 export interface ProductReview {

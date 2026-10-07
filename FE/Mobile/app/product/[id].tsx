@@ -6,7 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { EmptyState, LoadingState, ProductCard, ProductImage } from '@/components/shop-ui';
 import { cartService } from '@/services/cart.service';
 import { productService } from '@/services/product.service';
-import type { GroupedSpecification, Product, ProductImage as IProductImage, ProductReview, ProductVariant } from '@/types';
+import type { GroupedSpecification, GroupedSpecificationItem, Product, ProductImage as IProductImage, ProductReview, ProductSpecification, ProductVariant } from '@/types';
 import { formatCurrency, formatDate, getApiMessage } from '@/utils/format';
 
 export default function ProductDetailScreen() {
@@ -14,12 +14,18 @@ export default function ProductDetailScreen() {
   return <ProductDetail key={String(id)} id={id} initialQuantity={quantity} />;
 }
 
+interface VariantAttributeGroup {
+  key: string;
+  name: string;
+  unit?: string | null;
+  choices: string[];
+}
+
 function ProductDetail({ id, initialQuantity }: { id: string; initialQuantity?: string }) {
   const router = useRouter();
   const [product, setProduct] = useState<Product | null>(null);
   const [quantity, setQuantity] = useState(/^\d+$/.test(initialQuantity || '') && Number(initialQuantity) > 0 ? String(Math.min(999, Number(initialQuantity))) : '1');
   const [selectedVariantId, setSelectedVariantId] = useState<number | null>(null);
-  const [selectedSpecs, setSelectedSpecs] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [adding, setAdding] = useState(false);
@@ -54,8 +60,9 @@ function ProductDetail({ id, initialQuantity }: { id: string; initialQuantity?: 
       const { data } = await productService.getProductById(Number(id));
       if (current !== version.current) return;
       setProduct(data); setLoadError('');
-      setSelectedVariantId(data.variants?.[0]?.ma_bien_the || null);
-      setSelectedSpecs({});
+      const vList: ProductVariant[] = data.variants || [];
+      const inStock = vList.find((v: ProductVariant) => v.trang_thai === 'DangBan' && Number(v.so_luong) > 0) || vList[0];
+      setSelectedVariantId(inStock ? inStock.ma_bien_the : null);
       setRelatedError('');
 
       // Determine primary image
@@ -85,7 +92,7 @@ function ProductDetail({ id, initialQuantity }: { id: string; initialQuantity?: 
 
   const count = Number(quantity);
   const variants = product?.variants || [];
-  const selectedVariant: ProductVariant | undefined = variants.find(variant => variant.ma_bien_the === selectedVariantId) || variants[0];
+  const selectedVariant: ProductVariant | undefined = variants.find(variant => variant.ma_bien_the === selectedVariantId) || (variants.length > 0 ? variants[0] : undefined);
   const displayPrice = selectedVariant?.gia_ban ?? product?.gia_ban;
   const displayStock = selectedVariant?.so_luong ?? product?.so_luong;
   const max = Math.min(999, Number(displayStock || 0));
@@ -151,7 +158,245 @@ function ProductDetail({ id, initialQuantity }: { id: string; initialQuantity?: 
     return [];
   }, [product]);
 
-  const optionSpecs = groupedSpecs.flatMap(group => group.items.filter(item => item.type === 'OPTION'));
+  const hasStock = (variant: ProductVariant) => variant.trang_thai === 'DangBan' && Number(variant.so_luong) > 0;
+
+  const getVariantSpecValue = (variant: ProductVariant, specId?: number) => {
+    if (!variant.thong_so_ky_thuat) return '';
+    const found = variant.thong_so_ky_thuat.find(s => specId != null && s.ma_thong_so === specId);
+    if (!found) return '';
+    return String(found.gia_tri ?? found.gia_tri_so ?? '').trim();
+  };
+
+  const getVariantAttrValue = (variant: ProductVariant, groupKey: string): string => {
+    if (groupKey.startsWith('spec_')) {
+      const specId = Number(groupKey.replace('spec_', ''));
+      return getVariantSpecValue(variant, specId);
+    }
+    if (groupKey === 'variant_name') {
+      return variant.ten_bien_the.trim();
+    }
+    return '';
+  };
+
+  const variantAttributeGroups = useMemo<VariantAttributeGroup[]>(() => {
+    if (!variants.length) return [];
+
+    const hasAnySpecs = variants.some(v => v.thong_so_ky_thuat && v.thong_so_ky_thuat.length > 0);
+    if (!hasAnySpecs) {
+      // Variants do not have thong_so_json; use ten_bien_the
+      const sampleNames = variants.map(v => v.ten_bien_the.toLowerCase());
+      let groupName = 'Phiên bản';
+      if (sampleNames.some(n => n.includes('lít') || n.includes('lit'))) {
+        groupName = 'Dung tích';
+      } else if (sampleNames.some(n => n.includes('kg'))) {
+        groupName = 'Khối lượng';
+      } else if (sampleNames.some(n => n.includes('w'))) {
+        groupName = 'Công suất';
+      } else if (sampleNames.some(n => n.includes('màu'))) {
+        groupName = 'Màu sắc';
+      }
+
+      const choices = Array.from(new Set(variants.map(v => v.ten_bien_the.trim()))).filter(Boolean);
+      return [{
+        key: 'variant_name',
+        name: groupName,
+        choices,
+      }];
+    }
+
+    // Has specs in variants
+    // 1. Color: /màu|color/i
+    // 2. Power: /công\s*suất|watt|power/i
+    // 3. Other special specs that differentiate variants (distinct values > 1)
+    const allSpecsMap = new Map<number, { name: string; unit?: string | null; isColor: boolean; isPower: boolean; values: Set<string> }>();
+
+    for (const v of variants) {
+      for (const s of v.thong_so_ky_thuat || []) {
+        if (!allSpecsMap.has(s.ma_thong_so)) {
+          const name = s.ten_thong_so || `Thông số ${s.ma_thong_so}`;
+          const isColor = /màu|color/i.test(name);
+          const isPower = /công\s*suất|watt|power/i.test(name);
+          allSpecsMap.set(s.ma_thong_so, {
+            name,
+            unit: s.don_vi || null,
+            isColor,
+            isPower,
+            values: new Set(),
+          });
+        }
+        const val = String(s.gia_tri ?? s.gia_tri_so ?? '').trim();
+        if (val) allSpecsMap.get(s.ma_thong_so)!.values.add(val);
+      }
+    }
+
+    const groups: VariantAttributeGroup[] = [];
+
+    const sortChoices = (arr: string[]) => {
+      return [...arr].sort((a, b) => {
+        const numA = parseFloat(a);
+        const numB = parseFloat(b);
+        if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+        return a.localeCompare(b, 'vi');
+      });
+    };
+
+    // 1. Color group
+    let colorSpecId: number | null = null;
+    for (const [id, info] of allSpecsMap.entries()) {
+      if (info.isColor && info.values.size > 0) {
+        colorSpecId = id;
+        groups.push({
+          key: `spec_${id}`,
+          name: info.name || 'Màu sắc',
+          unit: info.unit,
+          choices: sortChoices(Array.from(info.values)),
+        });
+        break;
+      }
+    }
+
+    // 2. Power group
+    let powerSpecId: number | null = null;
+    for (const [id, info] of allSpecsMap.entries()) {
+      if (info.isPower && info.values.size > 0) {
+        powerSpecId = id;
+        groups.push({
+          key: `spec_${id}`,
+          name: info.name || 'Công suất',
+          unit: info.unit,
+          choices: sortChoices(Array.from(info.values)),
+        });
+        break;
+      }
+    }
+
+    // 3. Special differentiating specs (distinct values > 1, not color and not power)
+    for (const [id, info] of allSpecsMap.entries()) {
+      if (id !== colorSpecId && id !== powerSpecId && info.values.size > 1) {
+        groups.push({
+          key: `spec_${id}`,
+          name: info.name,
+          unit: info.unit,
+          choices: sortChoices(Array.from(info.values)),
+        });
+      }
+    }
+
+    // Fallback if no groups matched
+    if (groups.length === 0) {
+      groups.push({
+        key: 'variant_name',
+        name: 'Phiên bản',
+        choices: Array.from(new Set(variants.map(v => v.ten_bien_the.trim()))),
+      });
+    }
+
+    return groups;
+  }, [variants]);
+
+  const powerGroup = useMemo(() => variantAttributeGroups.find(g => /công\s*suất|watt|power/i.test(g.name)), [variantAttributeGroups]);
+  const colorGroup = useMemo(() => variantAttributeGroups.find(g => /màu|color/i.test(g.name)), [variantAttributeGroups]);
+
+  const isChoiceAvailable = useCallback((group: VariantAttributeGroup, choice: string) => {
+    const inStockWithChoice = variants.filter(v => hasStock(v) && getVariantAttrValue(v, group.key) === choice);
+    if (inStockWithChoice.length === 0) return false;
+
+    // Requirement:
+    // "và phải chọn được công suất thì không chọn các màu không còn công suất đó nữa"
+
+    // If checking Power:
+    // Any wattage that exists in stock is selectable ("phải chọn được công suất")
+    if (powerGroup && group.key === powerGroup.key) {
+      return true;
+    }
+
+    // If checking Color:
+    // If a Power is currently selected, color must have that power ("không chọn các màu không còn công suất đó nữa")
+    if (colorGroup && group.key === colorGroup.key && powerGroup && selectedVariant) {
+      const selectedPower = getVariantAttrValue(selectedVariant, powerGroup.key);
+      if (selectedPower) {
+        return inStockWithChoice.some(v => getVariantAttrValue(v, powerGroup.key) === selectedPower);
+      }
+    }
+
+    // For other special groups: check compatibility with selected Power
+    if (selectedVariant && powerGroup) {
+      const selectedPower = getVariantAttrValue(selectedVariant, powerGroup.key);
+      if (selectedPower && !inStockWithChoice.some(v => getVariantAttrValue(v, powerGroup.key) === selectedPower)) {
+        return false;
+      }
+    }
+
+    return true;
+  }, [variants, powerGroup, colorGroup, selectedVariant]);
+
+  const onSelectChoice = useCallback((group: VariantAttributeGroup, choice: string) => {
+    let candidates = variants.filter(v => hasStock(v) && getVariantAttrValue(v, group.key) === choice);
+    if (candidates.length === 0) {
+      candidates = variants.filter(v => getVariantAttrValue(v, group.key) === choice);
+    }
+    if (candidates.length === 0) return;
+
+    let best = candidates[0];
+
+    // If selected Power:
+    // "và phải chọn được công suất thì không chọn các màu không còn công suất đó nữa"
+    if (powerGroup && group.key === powerGroup.key) {
+      if (colorGroup && selectedVariant) {
+        const currentColor = getVariantAttrValue(selectedVariant, colorGroup.key);
+        const matchSameColor = candidates.find(v => getVariantAttrValue(v, colorGroup.key) === currentColor);
+        if (matchSameColor) {
+          best = matchSameColor;
+        } else {
+          // Current color doesn't have this wattage -> auto-switch to a valid color for this wattage!
+          best = candidates[0];
+        }
+      }
+    } else if (colorGroup && group.key === colorGroup.key) {
+      // If selected Color:
+      if (powerGroup && selectedVariant) {
+        const currentPower = getVariantAttrValue(selectedVariant, powerGroup.key);
+        const matchSamePower = candidates.find(v => getVariantAttrValue(v, powerGroup.key) === currentPower);
+        if (matchSamePower) best = matchSamePower;
+        else best = candidates[0];
+      }
+    } else if (selectedVariant) {
+      const match = candidates.find(v =>
+        (!powerGroup || getVariantAttrValue(v, powerGroup.key) === getVariantAttrValue(selectedVariant, powerGroup.key)) &&
+        (!colorGroup || getVariantAttrValue(v, colorGroup.key) === getVariantAttrValue(selectedVariant, colorGroup.key))
+      );
+      if (match) best = match;
+      else best = candidates[0];
+    }
+
+    setSelectedVariantId(best.ma_bien_the);
+    setQuantity('1');
+    setError('');
+  }, [variants, powerGroup, colorGroup, selectedVariant]);
+
+  const displayedGroupedSpecs = useMemo(() => {
+    if (!selectedVariant?.thong_so_ky_thuat?.length) return groupedSpecs;
+    const variantSpecMap = new Map<number, ProductSpecification>();
+    for (const spec of selectedVariant.thong_so_ky_thuat) {
+      variantSpecMap.set(spec.ma_thong_so, spec);
+    }
+
+    return groupedSpecs.map(group => ({
+      group: group.group,
+      items: group.items.map(item => {
+        const vSpec = variantSpecMap.get(item.ma_thong_so);
+        if (vSpec) {
+          const val = vSpec.gia_tri ?? (vSpec.gia_tri_so != null ? String(vSpec.gia_tri_so) : vSpec.gia_tri_bool != null ? (vSpec.gia_tri_bool ? 'Có' : 'Không') : item.value);
+          return {
+            ...item,
+            value: String(val),
+            unit: vSpec.don_vi || item.unit,
+          };
+        }
+        return item;
+      }),
+    }));
+  }, [groupedSpecs, selectedVariant]);
 
   if (loading) return <LoadingState message="Đang tải chi tiết sản phẩm..." />;
   if (!product) return <SafeAreaView style={styles.safe}><EmptyState icon="inventory-2" title="Chưa có thông tin sản phẩm" message={loadError} action="Thử lại" onAction={load} /><Pressable accessibilityRole="button" onPress={() => router.replace('/products')}><Text style={styles.centerLink}>Xem sản phẩm khác</Text></Pressable></SafeAreaView>;
@@ -213,24 +458,60 @@ function ProductDetail({ id, initialQuantity }: { id: string; initialQuantity?: 
           ) : null}
         </View>
 
-        {variants.length > 0 ? <View style={styles.card}>
-            <Text style={styles.sectionTitle}>Chọn biến thể</Text>
-            <Text style={styles.muted}>Lựa chọn: {selectedVariant?.ten_bien_the}</Text>
-            <View style={styles.variantRow}>{variants.map(variant => <Pressable key={variant.ma_bien_the} accessibilityRole="button" accessibilityState={{ selected: selectedVariant?.ma_bien_the === variant.ma_bien_the }} onPress={() => { setSelectedVariantId(variant.ma_bien_the); setQuantity('1'); setError(''); }} style={[styles.variantButton, selectedVariant?.ma_bien_the === variant.ma_bien_the && styles.variantSelected, (variant.trang_thai !== 'DangBan' || Number(variant.so_luong) < 1) && styles.disabled]} disabled={variant.trang_thai !== 'DangBan' || Number(variant.so_luong) < 1}>
-              <Text style={[styles.variantLabel, selectedVariant?.ma_bien_the === variant.ma_bien_the && styles.variantLabelSelected]}>{variant.ten_bien_the}</Text>
-              <Text style={styles.variantPrice}>{formatCurrency(variant.gia_ban)}</Text>
-            </Pressable>)}</View>
-        </View> : null}
+        {/* Variant selection: only Color, Power, or special product specs */}
+        {variantAttributeGroups.length > 0 ? (
+          <View style={styles.card}>
+            <Text style={styles.sectionTitle}>Tùy chọn sản phẩm</Text>
+            {selectedVariant ? (
+              <Text style={styles.muted}>
+                Đang chọn: <Text style={{ fontWeight: '700', color: '#183C35' }}>{selectedVariant.ten_bien_the}</Text>
+              </Text>
+            ) : null}
 
-        {optionSpecs.length > 0 ? <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Chọn thông số</Text>
-          {optionSpecs.map(spec => {
-            const values = String(spec.value || '').split(/[,|/]/).map(value => value.trim()).filter(Boolean);
-            const choices = values.length > 1 ? values : [String(spec.value || 'Đang cập nhật')];
-            const selected = selectedSpecs[String(spec.ma_thong_so)] || choices[0];
-            return <View key={spec.ma_thong_so} style={styles.specChoice}><Text style={styles.choiceTitle}>{spec.name}</Text><View style={styles.variantRow}>{choices.map(choice => <Pressable key={choice} accessibilityRole="button" accessibilityState={{ selected: selected === choice }} onPress={() => setSelectedSpecs(current => ({ ...current, [String(spec.ma_thong_so)]: choice }))} style={[styles.variantButton, selected === choice && styles.variantSelected]}><Text style={[styles.variantLabel, selected === choice && styles.variantLabelSelected]}>{choice}{spec.unit && !choice.includes(spec.unit) ? ` ${spec.unit}` : ''}</Text></Pressable>)}</View></View>;
-          })}
-        </View> : null}
+            {variantAttributeGroups.map(group => {
+              const selectedValue = selectedVariant ? getVariantAttrValue(selectedVariant, group.key) : '';
+              return (
+                <View key={group.key} style={styles.specChoice}>
+                  <Text style={styles.choiceTitle}>{group.name}</Text>
+                  <View style={styles.variantRow}>
+                    {group.choices.map(choice => {
+                      const isSelected = selectedValue === choice;
+                      const isAvailable = isChoiceAvailable(group, choice);
+
+                      return (
+                        <Pressable
+                          key={choice}
+                          accessibilityRole="button"
+                          accessibilityState={{ selected: isSelected, disabled: !isAvailable }}
+                          disabled={!isAvailable}
+                          onPress={() => onSelectChoice(group, choice)}
+                          style={[
+                            styles.variantButton,
+                            isSelected && styles.variantSelected,
+                            !isAvailable && styles.disabled,
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.variantLabel,
+                              isSelected && styles.variantLabelSelected,
+                              !isAvailable && styles.disabledText,
+                            ]}
+                          >
+                            {choice}{group.unit && !choice.includes(group.unit) ? ` ${group.unit}` : ''}
+                          </Text>
+                          {!isAvailable ? (
+                            <Text style={styles.unavailableBadge}>Không có sẵn</Text>
+                          ) : null}
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        ) : null}
 
         {/* Quantity selector */}
         <View style={styles.card}>
@@ -281,8 +562,8 @@ function ProductDetail({ id, initialQuantity }: { id: string; initialQuantity?: 
         {/* Technical Specifications by Group */}
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Thông số kỹ thuật</Text>
-          {groupedSpecs.length > 0 ? (
-            groupedSpecs.map(group => (
+          {displayedGroupedSpecs.length > 0 ? (
+            displayedGroupedSpecs.map(group => (
               <View key={group.group} style={styles.specGroupBlock}>
                 <Text style={styles.specGroupTitle}>{group.group.toUpperCase()}</Text>
                 {group.items.map((item, itemIdx) => {
@@ -441,6 +722,8 @@ const styles = StyleSheet.create({
   variantLabel: { color: '#183C35', fontSize: 14, fontWeight: '800' },
   variantLabelSelected: { color: '#176B52' },
   variantPrice: { color: '#6D7D76', fontSize: 11 },
+  disabledText: { color: '#8A9993' },
+  unavailableBadge: { fontSize: 10, color: '#A52D2D', fontWeight: '600', marginTop: 2 },
   specChoice: { gap: 9 },
   choiceTitle: { color: '#183C35', fontSize: 14, fontWeight: '800' },
   card: { padding: 18, borderRadius: 20, borderWidth: 1, borderColor: '#E3E9E1', backgroundColor: '#fff', gap: 14 },
