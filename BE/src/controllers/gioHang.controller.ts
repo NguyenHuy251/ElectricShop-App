@@ -59,3 +59,33 @@ export const addToCart = (req: AuthRequest, res: Response) => mutateCart(req, re
 export const updateCartItem = (req: AuthRequest, res: Response) => mutateCart(req, res, 'update');
 export const deleteCartItem = (req: AuthRequest, res: Response) => mutateCart(req, res, 'delete');
 export const clearCart = (req: AuthRequest, res: Response) => mutateCart(req, res, 'clear');
+
+export async function selectCartVariant(req: AuthRequest, res: Response) {
+  if (!req.user) return sendError(res, 401, 'Bạn chưa đăng nhập');
+  const productId = Number(req.params.ma_san_pham);
+  const target = req.body?.new_ma_bien_the;
+  const previous = req.body?.ma_bien_the ?? null;
+  if (!Number.isSafeInteger(productId) || productId < 1 || !Number.isSafeInteger(target) || target < 1 || (previous !== null && (!Number.isSafeInteger(previous) || previous < 1))) return sendError(res, 400, 'Mã sản phẩm hoặc biến thể không hợp lệ');
+  const connection = await pool.getConnection().catch(() => null);
+  if (!connection) return sendError(res, 503, 'Chưa thể chọn biến thể. Vui lòng thử lại.');
+  try {
+    await connection.query('SET TRANSACTION ISOLATION LEVEL READ COMMITTED');
+    await connection.beginTransaction();
+    const [carts] = await connection.query('SELECT ma_gio_hang FROM gio_hang WHERE ma_tai_khoan=? FOR UPDATE', [req.user.ma_tai_khoan]);
+    const cart = (carts as { ma_gio_hang: number }[])[0];
+    if (!cart) throw new CheckoutError(404, 'Giỏ hàng không tồn tại');
+    const [rows] = await connection.query('SELECT ma_bien_the,so_luong FROM chi_tiet_gio_hang WHERE ma_gio_hang=? AND ma_san_pham=? AND (ma_bien_the <=> ? OR ma_bien_the=?) FOR UPDATE', [cart.ma_gio_hang, productId, previous, target]);
+    const lines = rows as { ma_bien_the: number | null; so_luong: number }[];
+    if (!lines.some(line => line.ma_bien_the === previous)) throw new CheckoutError(404, 'Sản phẩm không còn trong giỏ hàng');
+    const quantity = lines.reduce((sum, line) => sum + line.so_luong, 0);
+    const product = await resolveItem(connection, productId, target, true);
+    if (product.trang_thai !== 'DangBan' || quantity > product.ton_kho || quantity > 999) throw new CheckoutError(409, 'Biến thể không bán hoặc không đủ tồn kho cho số lượng trong giỏ.');
+    await connection.execute('DELETE FROM chi_tiet_gio_hang WHERE ma_gio_hang=? AND ma_san_pham=? AND ma_bien_the <=> ?', [cart.ma_gio_hang, productId, previous]);
+    await connection.execute('INSERT INTO chi_tiet_gio_hang (ma_gio_hang,ma_san_pham,ma_bien_the,so_luong) VALUES (?,?,?,?) ON DUPLICATE KEY UPDATE so_luong=VALUES(so_luong)', [cart.ma_gio_hang, productId, target, quantity]);
+    await connection.commit();
+    return sendSuccess(res, 'Đã chọn biến thể', null);
+  } catch (error) {
+    await connection.rollback();
+    return sendError(res, error instanceof CheckoutError ? error.status : 503, error instanceof CheckoutError ? error.message : 'Chưa thể chọn biến thể. Vui lòng thử lại.');
+  } finally { connection.release(); }
+}

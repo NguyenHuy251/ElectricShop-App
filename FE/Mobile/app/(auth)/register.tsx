@@ -36,7 +36,7 @@ export default function RegisterScreen() {
     setLoading(true);
     try {
       await authService.register(value);
-      router.replace('/(tabs)');
+      router.replace({ pathname: '/(auth)/login', params: { registered: '1', username: value.ten_dang_nhap } });
     } catch (error: any) {
       const retryAfter = Number(error?.response?.headers?.['retry-after']);
       setError(getApiMessage(error, 'Đăng ký thất bại') + (error?.response?.status === 429 && retryAfter > 0 ? ` Thử lại sau khoảng ${Math.ceil(retryAfter / 60)} phút.` : ''));

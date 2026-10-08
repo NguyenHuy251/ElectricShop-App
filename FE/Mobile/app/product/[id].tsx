@@ -1,4 +1,5 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { choicesForSelectedColor, getVariantAttrValue, hasVariantStock, selectVariantChoice, variantsForSelectedColor, type VariantAttributeGroup } from '@/utils/variant-selection';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { Image, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -12,13 +13,6 @@ import { formatCurrency, formatDate, getApiMessage } from '@/utils/format';
 export default function ProductDetailScreen() {
   const { id, quantity } = useLocalSearchParams<{ id: string; quantity?: string }>();
   return <ProductDetail key={String(id)} id={id} initialQuantity={quantity} />;
-}
-
-interface VariantAttributeGroup {
-  key: string;
-  name: string;
-  unit?: string | null;
-  choices: string[];
 }
 
 function ProductDetail({ id, initialQuantity }: { id: string; initialQuantity?: string }) {
@@ -61,7 +55,7 @@ function ProductDetail({ id, initialQuantity }: { id: string; initialQuantity?: 
       if (current !== version.current) return;
       setProduct(data); setLoadError('');
       const vList: ProductVariant[] = data.variants || [];
-      const inStock = vList.find((v: ProductVariant) => v.trang_thai === 'DangBan' && Number(v.so_luong) > 0) || vList[0];
+      const inStock = vList.find(v => hasVariantStock(v) && v.thong_so_ky_thuat?.some(spec => /màu|color/i.test(spec.ten_thong_so || '') && String(spec.gia_tri || '').trim())) || vList.find(hasVariantStock) || vList[0];
       setSelectedVariantId(inStock ? inStock.ma_bien_the : null);
       setRelatedError('');
 
@@ -157,26 +151,6 @@ function ProductDetail({ id, initialQuantity }: { id: string; initialQuantity?: 
     }
     return [];
   }, [product]);
-
-  const hasStock = (variant: ProductVariant) => variant.trang_thai === 'DangBan' && Number(variant.so_luong) > 0;
-
-  const getVariantSpecValue = (variant: ProductVariant, specId?: number) => {
-    if (!variant.thong_so_ky_thuat) return '';
-    const found = variant.thong_so_ky_thuat.find(s => specId != null && s.ma_thong_so === specId);
-    if (!found) return '';
-    return String(found.gia_tri ?? found.gia_tri_so ?? '').trim();
-  };
-
-  const getVariantAttrValue = (variant: ProductVariant, groupKey: string): string => {
-    if (groupKey.startsWith('spec_')) {
-      const specId = Number(groupKey.replace('spec_', ''));
-      return getVariantSpecValue(variant, specId);
-    }
-    if (groupKey === 'variant_name') {
-      return variant.ten_bien_the.trim();
-    }
-    return '';
-  };
 
   const variantAttributeGroups = useMemo<VariantAttributeGroup[]>(() => {
     if (!variants.length) return [];
@@ -294,85 +268,25 @@ function ProductDetail({ id, initialQuantity }: { id: string; initialQuantity?: 
     return groups;
   }, [variants]);
 
-  const powerGroup = useMemo(() => variantAttributeGroups.find(g => /công\s*suất|watt|power/i.test(g.name)), [variantAttributeGroups]);
   const colorGroup = useMemo(() => variantAttributeGroups.find(g => /màu|color/i.test(g.name)), [variantAttributeGroups]);
 
-  const isChoiceAvailable = useCallback((group: VariantAttributeGroup, choice: string) => {
-    const inStockWithChoice = variants.filter(v => hasStock(v) && getVariantAttrValue(v, group.key) === choice);
-    if (inStockWithChoice.length === 0) return false;
+  const visibleAttributeGroups = useMemo(() => variantAttributeGroups.map(group => ({
+    ...group, choices: choicesForSelectedColor(group, variants, selectedVariant, colorGroup),
+  })).filter(group => group.choices.length > 0), [variantAttributeGroups, variants, selectedVariant, colorGroup]);
 
-    // Requirement:
-    // "và phải chọn được công suất thì không chọn các màu không còn công suất đó nữa"
+  const isChoiceAvailable = (group: VariantAttributeGroup, choice: string) => {
+    const scope = group.key === colorGroup?.key ? variants : variantsForSelectedColor(variants, selectedVariant, colorGroup);
+    return scope.some(variant => hasVariantStock(variant) && getVariantAttrValue(variant, group.key) === choice);
+  };
 
-    // If checking Power:
-    // Any wattage that exists in stock is selectable ("phải chọn được công suất")
-    if (powerGroup && group.key === powerGroup.key) {
-      return true;
-    }
-
-    // If checking Color:
-    // If a Power is currently selected, color must have that power ("không chọn các màu không còn công suất đó nữa")
-    if (colorGroup && group.key === colorGroup.key && powerGroup && selectedVariant) {
-      const selectedPower = getVariantAttrValue(selectedVariant, powerGroup.key);
-      if (selectedPower) {
-        return inStockWithChoice.some(v => getVariantAttrValue(v, powerGroup.key) === selectedPower);
-      }
-    }
-
-    // For other special groups: check compatibility with selected Power
-    if (selectedVariant && powerGroup) {
-      const selectedPower = getVariantAttrValue(selectedVariant, powerGroup.key);
-      if (selectedPower && !inStockWithChoice.some(v => getVariantAttrValue(v, powerGroup.key) === selectedPower)) {
-        return false;
-      }
-    }
-
-    return true;
-  }, [variants, powerGroup, colorGroup, selectedVariant]);
-
-  const onSelectChoice = useCallback((group: VariantAttributeGroup, choice: string) => {
-    let candidates = variants.filter(v => hasStock(v) && getVariantAttrValue(v, group.key) === choice);
-    if (candidates.length === 0) {
-      candidates = variants.filter(v => getVariantAttrValue(v, group.key) === choice);
-    }
-    if (candidates.length === 0) return;
-
-    let best = candidates[0];
-
-    // If selected Power:
-    // "và phải chọn được công suất thì không chọn các màu không còn công suất đó nữa"
-    if (powerGroup && group.key === powerGroup.key) {
-      if (colorGroup && selectedVariant) {
-        const currentColor = getVariantAttrValue(selectedVariant, colorGroup.key);
-        const matchSameColor = candidates.find(v => getVariantAttrValue(v, colorGroup.key) === currentColor);
-        if (matchSameColor) {
-          best = matchSameColor;
-        } else {
-          // Current color doesn't have this wattage -> auto-switch to a valid color for this wattage!
-          best = candidates[0];
-        }
-      }
-    } else if (colorGroup && group.key === colorGroup.key) {
-      // If selected Color:
-      if (powerGroup && selectedVariant) {
-        const currentPower = getVariantAttrValue(selectedVariant, powerGroup.key);
-        const matchSamePower = candidates.find(v => getVariantAttrValue(v, powerGroup.key) === currentPower);
-        if (matchSamePower) best = matchSamePower;
-        else best = candidates[0];
-      }
-    } else if (selectedVariant) {
-      const match = candidates.find(v =>
-        (!powerGroup || getVariantAttrValue(v, powerGroup.key) === getVariantAttrValue(selectedVariant, powerGroup.key)) &&
-        (!colorGroup || getVariantAttrValue(v, colorGroup.key) === getVariantAttrValue(selectedVariant, colorGroup.key))
-      );
-      if (match) best = match;
-      else best = candidates[0];
-    }
-
+  const onSelectChoice = (group: VariantAttributeGroup, choice: string) => {
+    const best = selectVariantChoice(variants, variantAttributeGroups, selectedVariant, colorGroup, group, choice);
+    if (!best) return;
     setSelectedVariantId(best.ma_bien_the);
     setQuantity('1');
     setError('');
-  }, [variants, powerGroup, colorGroup, selectedVariant]);
+    setNotice('');
+  };
 
   const displayedGroupedSpecs = useMemo(() => {
     if (!selectedVariant?.thong_so_ky_thuat?.length) return groupedSpecs;
@@ -469,7 +383,7 @@ function ProductDetail({ id, initialQuantity }: { id: string; initialQuantity?: 
               </Text>
             ) : null}
 
-            {variantAttributeGroups.map(group => {
+            {visibleAttributeGroups.map(group => {
               const selectedValue = selectedVariant ? getVariantAttrValue(selectedVariant, group.key) : '';
               return (
                 <View key={group.key} style={styles.specChoice}>

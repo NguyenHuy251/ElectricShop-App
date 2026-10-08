@@ -5,7 +5,9 @@ import { danhMucService } from '../services/danhMuc.service.js';
 
 export async function getAllDanhMuc(req: Request, res: Response) {
   try {
-    const rows = await danhMucService.list();
+    const rows = req.query.has_products === 'true'
+      ? await danhMucService.listWithProducts()
+      : await danhMucService.list();
     return sendSuccess(res, 'Danh sách danh mục', rows);
   } catch (error) {
     if (duplicateField(error, res, 'ten_danh_muc', 'Tên danh mục đã tồn tại')) return;

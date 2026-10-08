@@ -38,6 +38,10 @@ Admin dùng `VITE_API_URL=http://localhost:3000/api`. Mobile dùng `EXPO_PUBLIC_
 
 Database hiện có phải được chuyển bằng bản backup có bảng, dữ liệu, stored procedure và trigger. **Không chạy `BE/database/database.sql` trên database đang dùng**: file đó có `DROP DATABASE`.
 
+Nếu đăng nhập trả lỗi `Illegal mix of collations`, chạy `npm run migrate:auth` tại `BE`. Lệnh này đồng bộ collation của tham số trong procedure đăng nhập/kiểm tra tài khoản với cột thực tế, giữ nguyên dữ liệu và lưu định nghĩa procedure cũ trong `BE/logs/auth-migrations/`. Chạy lại không thay đổi procedure đã đồng bộ; `npm run migrate` cũng bao gồm bước này.
+
+Nếu danh sách/tìm kiếm sản phẩm cũng lỗi collation, chạy `npm run migrate:collations` tại `BE`. Lệnh này sửa thêm procedure tìm kiếm, kiểm tra mã sản phẩm và email tài khoản, lưu bản sao trong `BE/logs/collation-migrations/`. `npm run migrate` bao gồm bước sửa này. Kiểm thử hồi quy trên database riêng: `$env:AUTH_INTEGRATION='1'; npm test`.
+
 ## Kiểm tra mã nguồn
 
 ```powershell

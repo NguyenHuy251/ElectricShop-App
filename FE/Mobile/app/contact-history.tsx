@@ -1,7 +1,7 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
-import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useRef, useState } from 'react';
+import { AppState, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { EmptyState, LoadingState } from '../components/shop-ui';
 import { contactService } from '../services/contact.service';
@@ -14,21 +14,32 @@ export default function ContactHistoryScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
+  const active = useRef(false);
+  const busy = useRef(false);
 
   const load = useCallback(async () => {
+    if (busy.current) return;
+    busy.current = true;
     try {
       const { data } = await contactService.getMine();
+      if (!active.current) return;
       setContacts(data.data || []);
       setError('');
     } catch (err) {
+      if (!active.current) return;
       setError(getApiMessage(err, 'Không thể tải phản hồi của bạn.'));
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      busy.current = false;
+      if (active.current) { setLoading(false); setRefreshing(false); }
     }
   }, []);
 
-  useFocusEffect(useCallback(() => { void load(); }, [load]));
+  useFocusEffect(useCallback(() => {
+    active.current = true; void load();
+    const timer = setInterval(() => { if (AppState.currentState === 'active') void load(); }, 15000);
+    const listener = AppState.addEventListener('change', state => { if (state === 'active') void load(); });
+    return () => { active.current = false; clearInterval(timer); listener.remove(); };
+  }, [load]));
 
   if (loading) return <SafeAreaView style={styles.safe}><LoadingState message="Đang tải liên hệ của bạn..." /></SafeAreaView>;
   if (error && !contacts.length) return <SafeAreaView style={styles.safe}><EmptyState icon="forum" title="Chưa tải được liên hệ" message={error} action="Thử lại" onAction={load} /></SafeAreaView>;

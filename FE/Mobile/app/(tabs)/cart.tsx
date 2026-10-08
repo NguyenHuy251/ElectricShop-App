@@ -5,7 +5,8 @@ import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'r
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { EmptyState, LoadingState, ProductImage, ScreenHeading } from '@/components/shop-ui';
 import { cartService } from '@/services/cart.service';
-import type { CartItem } from '@/types';
+import { productService } from '@/services/product.service';
+import type { CartItem, ProductVariant } from '@/types';
 import { formatCurrency, getApiMessage } from '@/utils/format';
 
 export default function CartScreen() {
@@ -15,6 +16,7 @@ export default function CartScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [updating, setUpdating] = useState(false);
   const [error, setError] = useState('');
+  const [variantPicker, setVariantPicker] = useState<{ item: CartItem; variants: ProductVariant[] } | null>(null);
   const busy = useRef(false);
 
   const loadCart = useCallback(async () => {
@@ -41,6 +43,25 @@ export default function CartScreen() {
   };
 
   const total = items.reduce((sum, item) => sum + Number(item.gia_ban) * item.so_luong, 0);
+  const needsVariant = items.some(item => Boolean(item.needs_variant));
+  const chooseVariant = async (item: CartItem) => {
+    if (busy.current) return;
+    busy.current = true; setUpdating(true); setError(''); setVariantPicker(null);
+    try {
+      const { data } = await productService.getProductById(item.ma_san_pham);
+      setVariantPicker({ item, variants: data.variants || [] });
+    } catch (err) { setError(getApiMessage(err, 'Không thể tải biến thể.')); }
+    finally { busy.current = false; setUpdating(false); }
+  };
+  const selectVariant = async (variant: ProductVariant) => {
+    if (!variantPicker || busy.current) return;
+    busy.current = true; setUpdating(true); setError('');
+    try {
+      await cartService.selectVariant(variantPicker.item.ma_san_pham, variant.ma_bien_the, variantPicker.item.ma_bien_the);
+      setVariantPicker(null); await loadCart();
+    } catch (err) { setError(getApiMessage(err, 'Không thể chọn biến thể.')); }
+    finally { busy.current = false; setUpdating(false); }
+  };
   if (loading) return <LoadingState message="Đang tải giỏ hàng..." />;
   return <SafeAreaView style={styles.safe} edges={['top']}>
     <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); void loadCart(); }} />}>
@@ -52,12 +73,18 @@ export default function CartScreen() {
           <View style={styles.info}>
             <Text style={styles.name}>{item.ten_san_pham}</Text>
             {item.ten_bien_the ? <Text style={styles.muted}>{item.ten_bien_the}</Text> : null}
+            {item.needs_variant ? <Text style={styles.error}>Chọn biến thể trước khi thanh toán.</Text> : null}
+            {item.needs_variant || item.ma_bien_the ? <Pressable accessibilityRole="button" disabled={updating} onPress={() => void chooseVariant(item)}><Text style={styles.link}>{item.needs_variant ? 'Chọn biến thể' : 'Đổi biến thể'}</Text></Pressable> : null}
+            {variantPicker?.item.ma_san_pham === item.ma_san_pham && variantPicker.item.ma_bien_the === item.ma_bien_the ? <View>
+              {variantPicker.variants.length ? variantPicker.variants.map(variant => <Pressable key={variant.ma_bien_the} accessibilityRole="button" disabled={updating || variant.trang_thai !== 'DangBan' || Number(variant.so_luong) < item.so_luong} onPress={() => void selectVariant(variant)}><Text style={[styles.link, (variant.trang_thai !== 'DangBan' || Number(variant.so_luong) < item.so_luong) && { opacity: 0.5 }]}>{variant.ten_bien_the} · {formatCurrency(variant.gia_ban)} · Còn {variant.so_luong}</Text></Pressable>) : <Text style={styles.error}>Không có biến thể khả dụng.</Text>}
+              <Pressable disabled={updating} onPress={() => setVariantPicker(null)}><Text style={styles.link}>Đóng</Text></Pressable>
+            </View> : null}
             <Text style={styles.price}>{formatCurrency(item.gia_ban)}</Text>
             {item.trang_thai !== 'DangBan' || Number(item.ton_kho) < item.so_luong ? <Text style={styles.error}>Sản phẩm không bán hoặc không đủ tồn kho.</Text> : null}
             <View style={styles.quantity}>
-              <Pressable accessibilityRole="button" accessibilityLabel={`Giảm số lượng ${item.ten_san_pham}`} disabled={updating} style={styles.qtyButton} onPress={() => update(item, item.so_luong - 1)}><MaterialIcons name="remove" size={18} color="#183C35" /></Pressable>
+              <Pressable accessibilityRole="button" accessibilityLabel={`Giảm số lượng ${item.ten_san_pham}`} disabled={updating || Boolean(item.needs_variant)} style={styles.qtyButton} onPress={() => update(item, item.so_luong - 1)}><MaterialIcons name="remove" size={18} color="#183C35" /></Pressable>
               <Text style={styles.name}>{item.so_luong}</Text>
-              <Pressable accessibilityRole="button" accessibilityLabel={`Tăng số lượng ${item.ten_san_pham}`} disabled={updating || item.so_luong >= Number(item.ton_kho)} style={styles.qtyButton} onPress={() => update(item, item.so_luong + 1)}><MaterialIcons name="add" size={18} color="#183C35" /></Pressable>
+              <Pressable accessibilityRole="button" accessibilityLabel={`Tăng số lượng ${item.ten_san_pham}`} disabled={updating || Boolean(item.needs_variant) || item.so_luong >= Number(item.ton_kho)} style={styles.qtyButton} onPress={() => update(item, item.so_luong + 1)}><MaterialIcons name="add" size={18} color="#183C35" /></Pressable>
             </View>
           </View>
           <Pressable accessibilityRole="button" accessibilityLabel={`Xóa ${item.ten_san_pham}`} disabled={updating} onPress={() => update(item, 0)} hitSlop={12}><MaterialIcons name="delete-outline" size={24} color="#6D7D76" /></Pressable>
@@ -66,7 +93,8 @@ export default function CartScreen() {
           <Text style={styles.name}>Tạm tính ({items.reduce((sum, item) => sum + item.so_luong, 0)} sản phẩm)</Text>
           <Text style={styles.total}>{formatCurrency(total)}</Text>
           <Text style={styles.muted}>Nhập thông tin nhận hàng và kiểm tra tổng tiền ở bước tiếp theo. Thanh toán khi nhận hàng.</Text>
-          <Pressable accessibilityRole="button" accessibilityLabel="Tiến hành thanh toán" disabled={updating || refreshing || Boolean(error)} style={[styles.button, (updating || refreshing || Boolean(error)) && { opacity: 0.5 }]} onPress={() => router.push('/checkout')}>
+          {needsVariant ? <Text style={styles.error}>Vui lòng chọn biến thể cho các sản phẩm được đánh dấu bên trên.</Text> : null}
+          <Pressable accessibilityRole="button" accessibilityLabel="Tiến hành thanh toán" disabled={updating || refreshing || Boolean(error) || needsVariant} style={[styles.button, (updating || refreshing || Boolean(error) || needsVariant) && { opacity: 0.5 }]} onPress={() => router.push('/checkout')}>
             <Text style={styles.buttonText}>{updating ? 'Đang cập nhật...' : 'Tiến hành thanh toán'}</Text><MaterialIcons name="arrow-forward" color="#fff" size={20} />
           </Pressable>
         </View>

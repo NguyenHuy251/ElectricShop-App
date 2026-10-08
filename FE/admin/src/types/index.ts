@@ -1,4 +1,5 @@
 export interface User {
+  permissions?: import('../auth/permissions').Permission[];
   ma_tai_khoan: number;
   ten_dang_nhap: string;
   ho_ten: string;
@@ -148,6 +149,25 @@ export interface ProductInput {
   variants?: ProductVariant[];
 }
 
+export interface OrderItem {
+  ma_san_pham: number;
+  ma_bien_the?: number | null;
+  ten_san_pham: string;
+  ten_bien_the?: string | null;
+  hinh_anh?: string | null;
+  so_luong: number;
+  don_gia: number | string;
+  thanh_tien: number | string;
+  product_details?: {
+    ma_san_pham_code?: string;
+    ma_sku?: string | null;
+    ten_danh_muc?: string;
+    ten_thuong_hieu?: string;
+    bao_hanh?: number | null;
+    thong_so_ky_thuat: { ma_thong_so: number; ten_thong_so: string; gia_tri: string }[];
+  } | null;
+}
+
 export interface Order {
   ma_voucher?: number | null;
   ma_code?: string | null;
@@ -166,7 +186,7 @@ export interface Order {
   trang_thai: 'ChoXacNhan' | 'DaXacNhan' | 'DangGiao' | 'DaGiao' | 'DaHuy';
   ghi_chu?: string | null;
   ngay_dat?: string;
-  items?: Array<{ ma_don_hang: number; ma_san_pham: number; ma_bien_the?: number | null; ten_bien_the?: string | null; ten_san_pham: string; so_luong: number; don_gia: number | string; thanh_tien: number | string }>;
+  items?: OrderItem[];
 }
 
 export interface DashboardStatistics {

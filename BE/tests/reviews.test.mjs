@@ -71,12 +71,15 @@ test('order details restore saved reviews for the order owner', async () => {
   pool.query = async (sql, args) => {
     if (sql.includes('sp_don_hang_get_by_id')) return [[[{ ma_don_hang: 12, ma_tai_khoan: 4 }], [{ ma_san_pham: 7 }]]];
     if (sql.includes('FROM chi_tiet_don_hang')) return [[{ ma_san_pham: 7 }]];
+    if (sql.includes('JOIN thong_so ts')) return [[]];
+    if (sql.includes('FROM san_pham p')) { assert.deepEqual(args, [[7]]); return [[{ ma_san_pham: 7, hinh_anh: '/uploads/product-7.jpg' }]]; }
     if (sql.includes('FROM don_hang WHERE ma_don_hang IN')) return [[{ ma_don_hang: 12, ma_code: null, giam_gia: 0, phi_giao_hang: 0, tam_tinh: 100000 }]];
     assert.match(sql, /FROM danh_gia/); assert.deepEqual(args, [4]);
     return [[{ ma_danh_gia: 9, ma_san_pham: 7, so_sao: 5, noi_dung: 'Rất tốt' }]];
   };
   const res = response(); await getDonHangById({ ...request(), params: { id: '12' } }, res);
   assert.equal(res.statusCode, 200); assert.equal(res.body.data.reviews[0].ma_danh_gia, 9);
+  assert.equal(res.body.data.items[0].hinh_anh, '/uploads/product-7.jpg');
 });
 
 test('order details enable reviews only for the owner of a delivered order', async () => {

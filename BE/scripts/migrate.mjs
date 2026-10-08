@@ -2,8 +2,12 @@ import { readFile } from 'node:fs/promises';
 import { pool } from '../dist/config/database.js';
 import { migrateCommerce } from './migrate-commerce.mjs';
 import { migrateLocal } from './migrate-local.mjs';
+import { migrateCollations } from './migrate-collations.mjs';
+import { migratePermissions } from './migrate-permissions.mjs';
 
 try {
+  const collationConnection = await pool.getConnection();
+  try { await migrateCollations(collationConnection); } finally { collationConnection.release(); }
   await pool.query(await readFile(new URL('../migrations/001_checkout.sql', import.meta.url), 'utf8'));
   console.log('001_checkout.sql applied. Existing data preserved.');
 
@@ -93,5 +97,6 @@ try {
 
   await migrateCommerce();
   await migrateLocal();
+  await migratePermissions();
 } finally { await pool.end(); }
 

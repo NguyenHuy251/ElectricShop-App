@@ -70,16 +70,19 @@ test('cancellation restores inventory once and commits atomically', async () => 
   const second = response(); await updateTrangThaiDonHang(request, second);
   assert.equal(second.statusCode, 409);
 });
-test('sequential confirmation and delivery work without restoring stock', async () => {
+test('management confirms and dispatches orders but cannot mark them delivered', async () => {
   pool.query = async (sql, args) => {
     if (sql.includes('sp_don_hang_update_status')) {
       return [[[{ ma_don_hang: 1, trang_thai: args[1] }]]];
     }
     return [[]];
   };
-  for (const status of ['DaXacNhan', 'DangGiao', 'DaGiao']) {
+  for (const status of ['DaXacNhan', 'DangGiao']) {
     const res = response(); await updateTrangThaiDonHang({ params: { id: '1' }, body: { trang_thai: status } }, res); assert.equal(res.statusCode, 200);
   }
+  pool.query = () => assert.fail('Management must not change delivery status');
+  const res = response(); await updateTrangThaiDonHang({params:{id:'1'},body:{trang_thai:'DaGiao'}},res);
+  assert.equal(res.statusCode,409);
 });
 test('active orders cannot be deleted', async () => {
   pool.query = async (sql) => {

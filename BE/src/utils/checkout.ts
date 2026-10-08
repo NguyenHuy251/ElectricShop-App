@@ -19,6 +19,7 @@ export function checkoutSelection(value: Record<string, unknown>, query = false)
 }
 
 export interface CheckoutItem {
+  needs_variant?: boolean | number;
   ma_bien_the?: number | null;
   ten_bien_the?: string | null;
   ma_san_pham: number;
@@ -35,6 +36,7 @@ export function summarizeCart(items: CheckoutItem[]) {
   const issues: string[] = [];
   let cents = 0;
   for (const item of sorted) {
+    if (item.needs_variant) issues.push(`Vui lòng chọn biến thể cho ${item.ten_san_pham} trong giỏ hàng.`);
     if (!Number.isInteger(item.so_luong) || item.so_luong < 1 || item.so_luong > 999) issues.push(`Số lượng của ${item.ten_san_pham} không hợp lệ.`);
     if (item.trang_thai !== 'DangBan') issues.push(`${item.ten_san_pham} hiện không bán.`);
     else if (item.so_luong > item.ton_kho) issues.push(`${item.ten_san_pham} chỉ còn ${item.ton_kho} sản phẩm.`);

@@ -14,6 +14,11 @@ test('checkout transactions against an isolated MySQL database', { skip: process
     await admin.query(`USE \`${database}\``);
     const schema = await readFile(new URL('../database/database.sql', import.meta.url), 'utf8');
     await admin.query(schema.slice(schema.indexOf('CREATE TABLE tai_khoan'), schema.indexOf('INSERT INTO tai_khoan')));
+    const productSchema = await readFile(new URL('../database/upgrade_product_management_migration_fixed.sql', import.meta.url), 'utf8');
+    for (const table of ['nhom_thong_so','thong_so','danh_muc_thong_so','thong_so_san_pham']) {
+      const definition = productSchema.match(new RegExp('CREATE TABLE ' + table + ' \\([\\s\\S]*?ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;'))?.[0];
+      assert.ok(definition); await admin.query(definition);
+    }
     // Order-detail authorization calls this routine before checking the owner.
     const detailProcedure = schema.match(/CREATE PROCEDURE sp_don_hang_get_by_id\([\s\S]*?\$\$/)?.[0];
     assert.ok(detailProcedure, 'Order detail procedure must exist in the test schema');
@@ -32,10 +37,15 @@ test('checkout transactions against an isolated MySQL database', { skip: process
     }
     await migrateCommerce();
     const { migrateLocal } = await import('../scripts/migrate-local.mjs');
+    await admin.query('ALTER TABLE lien_he ADD COLUMN phan_hoi TEXT NULL, ADD COLUMN ngay_phan_hoi DATETIME NULL');
+    for (const name of ['sp_lien_he_get_by_id','sp_lien_he_list','sp_lien_he_update_status']) {
+      const start = schema.indexOf('CREATE PROCEDURE '+name+'(');
+      assert.ok(start >= 0); await admin.query(schema.slice(start,schema.indexOf('$$',start)));
+    }
     await migrateLocal();
     const { createDonHang, previewCheckout } = await import('../dist/controllers/checkout.controller.js');
     const { cancelDonHang, getDonHangById } = await import('../dist/controllers/donHang.controller.js');
-    const { addToCart, updateCartItem } = await import('../dist/controllers/gioHang.controller.js');
+    const { addToCart, updateCartItem, selectCartVariant } = await import('../dist/controllers/gioHang.controller.js');
     const response = () => ({ statusCode: 200, body: null, status(code) { this.statusCode = code; return this; }, json(body) { this.body = body; return this; } });
     const user = id => ({ ma_tai_khoan: id, vai_tro: 'KhachHang' });
     const invoke = async (fn, req) => { const res = response(); await fn(req, res); return res; };
@@ -123,6 +133,33 @@ test('checkout transactions against an isolated MySQL database', { skip: process
       await admin.query('UPDATE tai_khoan SET token_version=0 WHERE ma_tai_khoan=1');
     });
 
+    await t.test('legacy cart requires a variant, selection merges quantities and checkout keeps the chosen variant', async () => {
+      await reset();
+      await admin.query("INSERT INTO san_pham_bien_the (ma_bien_the,ma_san_pham,ma_sku,ten_bien_the,gia_ban,so_luong) VALUES (101,1,'TEST-A','A',120000,3),(102,1,'TEST-B','B',180000,4)");
+      const invalidQuote = (await invoke(previewCheckout,{user:user(1),query:{}})).body.data;
+      assert.equal(invalidQuote.can_checkout,false);
+      assert.match(invalidQuote.issues.join(' '),/chọn biến thể/);
+      assert.equal((await invoke(addToCart,{user:user(1),body:{ma_san_pham:1,ma_bien_the:101,so_luong:1},params:{}})).statusCode,200);
+      assert.equal((await invoke(addToCart,{user:user(1),body:{ma_san_pham:1,ma_bien_the:102,so_luong:2},params:{}})).statusCode,200);
+      const choose = (previous,target) => invoke(selectCartVariant,{user:user(1),params:{ma_san_pham:'1'},body:{ma_bien_the:previous,new_ma_bien_the:target}});
+      assert.equal((await choose(null,999)).statusCode,409);
+      assert.equal((await choose(102,101)).statusCode,200);
+      // 101 now contains three items; merging the legacy two would exceed its stock.
+      assert.equal((await choose(null,101)).statusCode,409);
+      assert.equal((await admin.query('SELECT so_luong FROM chi_tiet_gio_hang WHERE ma_bien_the IS NULL'))[0][0].so_luong,2);
+      assert.equal((await choose(null,102)).statusCode,200);
+      const [lines] = await admin.query('SELECT ma_bien_the,so_luong FROM chi_tiet_gio_hang ORDER BY ma_bien_the');
+      assert.deepEqual(lines.map(r=>[r.ma_bien_the,r.so_luong]),[[101,3],[102,2]]);
+      const quote = (await invoke(previewCheckout,{user:user(1),query:{}})).body.data;
+      assert.equal(quote.can_checkout,true);
+      const order = await invoke(createDonHang,{user:user(1),body:{...await payload(),snapshot:quote.snapshot}});
+      assert.equal(order.statusCode,200);
+      const [details] = await admin.query('SELECT ma_bien_the,ten_bien_the,so_luong,don_gia FROM chi_tiet_don_hang WHERE ma_don_hang=? ORDER BY ma_bien_the',[order.body.data.ma_don_hang]);
+      assert.deepEqual(details.map(r=>[r.ma_bien_the,r.ten_bien_the,r.so_luong,Number(r.don_gia)]),[[101,'A',3,120000],[102,'B',2,180000]]);
+      assert.equal(await stock(),10);
+      assert.equal((await invoke(cancelDonHang,{user:user(1),params:{id:order.body.data.ma_don_hang}})).statusCode,200);
+    });
+
     await t.test('variants remain distinct, checkout reserves only variant stock and cancellation restores once', async () => {
       await reset();
       await admin.query("DELETE FROM chi_tiet_gio_hang; INSERT INTO san_pham_bien_the (ma_bien_the,ma_san_pham,ma_sku,ten_bien_the,gia_ban,so_luong) VALUES (101,1,'TEST-A','A',120000,3),(102,1,'TEST-B','B',180000,4)");
@@ -151,13 +188,18 @@ test('checkout transactions against an isolated MySQL database', { skip: process
 
     await t.test('actual order procedures reject skipped states, deliver sequentially and restore canceled variants once',async()=>{
       await reset();
-      const {updateTrangThaiDonHang}=await import('../dist/controllers/donHang.controller.js');
+      const {updateTrangThaiDonHang,confirmOrderReceipt}=await import('../dist/controllers/donHang.controller.js');
       const order=await invoke(createDonHang,{user:user(1),body:await direct()});const id=order.body.data.ma_don_hang;
       const set=state=>invoke(updateTrangThaiDonHang,{params:{id},body:{trang_thai:state}});
       assert.equal((await set('DaGiao')).statusCode,409);
       assert.equal((await set('DaXacNhan')).statusCode,200);
       assert.equal((await invoke(cancelDonHang,{user:user(1),params:{id}})).statusCode,400);
-      assert.equal((await set('DangGiao')).statusCode,200);assert.equal((await set('DaGiao')).statusCode,200);
+      assert.equal((await invoke(confirmOrderReceipt,{user:user(1),params:{id}})).statusCode,409);
+      assert.equal((await set('DangGiao')).statusCode,200);assert.equal((await set('DaGiao')).statusCode,409);
+      assert.equal((await invoke(confirmOrderReceipt,{user:user(2),params:{id}})).statusCode,404);
+      const receipts=await Promise.all([1,2].map(()=>invoke(confirmOrderReceipt,{user:user(1),params:{id}})));
+      assert.deepEqual(receipts.map(r=>r.statusCode),[200,200]);
+      assert.equal((await admin.query('SELECT trang_thai FROM don_hang WHERE ma_don_hang=?',[id]))[0][0].trang_thai,'DaGiao');
       assert.equal((await set('DaHuy')).statusCode,409);assert.equal(await stock(),9);
       await reset();
       await admin.query("DELETE FROM chi_tiet_gio_hang; INSERT INTO san_pham_bien_the (ma_bien_the,ma_san_pham,ma_sku,ten_bien_the,gia_ban,so_luong) VALUES (101,1,'TEST-A','A',120000,3)");
@@ -234,6 +276,40 @@ test('checkout transactions against an isolated MySQL database', { skip: process
         assert.equal((await request('/vouchers',1)).status,403);
         assert.equal((await request('/inventory',1)).status,403);
       }finally{await new Promise(resolve=>server.close(resolve));}
+    });
+
+    await t.test('contact submission binds the authenticated sender, replies appear only to owner and create one notification', async () => {
+      const {default:express}=await import('express');
+      const {default:contactRouter}=await import('../dist/routes/lienHe.routes.js');
+      const {default:shopRouter}=await import('../dist/routes/shop.routes.js');
+      const {signToken}=await import('../dist/utils/jwt.js');
+      await admin.query("INSERT INTO tai_khoan (ma_tai_khoan,ten_dang_nhap,mat_khau,ho_ten,vai_tro) VALUES (3,'contactadmin','unused','Test Admin','Admin')");
+      const app=express();app.use(express.json());app.use('/lien-he',contactRouter);app.use('/shop',shopRouter);
+      const server=await new Promise(resolve=>{const s=app.listen(0,'127.0.0.1',()=>resolve(s));});
+      const base=`http://127.0.0.1:${server.address().port}`;
+      const request=async(path,account=1,method='GET',body)=>{
+        const result=await fetch(base+path,{method,headers:{Authorization:`Bearer ${signToken({ma_tai_khoan:account,ten_dang_nhap:'test',vai_tro:account===3?'Admin':'KhachHang'})}`,'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})});
+        return {status:result.status,body:await result.json()};
+      };
+      try {
+        const payload={ma_tai_khoan:2,ho_ten:'Test Customer',email:'test@example.test',so_dien_thoai:'0912345678',tieu_de:'Contact question',noi_dung:'Please help with my order.'};
+        const created=await request('/lien-he',1,'POST',payload);assert.equal(created.status,200);
+        const id=created.body.data.ma_lien_he;
+        const mine=(await request('/lien-he/cua-toi')).body.data.find(row=>row.ma_lien_he===id);
+        assert.equal(mine.ma_tai_khoan,1);
+        assert.equal((await request('/lien-he/cua-toi',2)).body.data.some(row=>row.ma_lien_he===id),false);
+        assert.equal((await request(`/lien-he/${id}`,1,'PUT',{phan_hoi:'Unauthorized reply'})).status,403);
+        assert.equal((await request(`/lien-he/${id}`,3,'PUT',{phan_hoi:'Your order is on its way.'})).status,200);
+        const replied=(await request('/lien-he/cua-toi')).body.data.find(row=>row.ma_lien_he===id);
+        assert.equal(replied.phan_hoi,'Your order is on its way.');assert.equal(replied.trang_thai,'DaPhanHoi');assert.ok(replied.ngay_phan_hoi);
+        const replies=(await request('/shop/notifications')).body.data.filter(row=>row.tieu_de==='Contact reply');
+        assert.equal(replies.length,1);assert.equal(replies[0].da_doc,0);
+        await request(`/lien-he/${id}`,3,'PUT',{phan_hoi:'Your order is on its way.'});
+        assert.equal((await request('/shop/notifications')).body.data.filter(row=>row.tieu_de==='Contact reply').length,1);
+        assert.equal((await request('/shop/notifications',2)).body.data.some(row=>row.tieu_de==='Contact reply'),false);
+        await request(`/shop/notifications/${replies[0].ma_thong_bao}/read`,1,'PUT');
+        assert.equal((await request('/shop/notifications')).body.data.find(row=>row.ma_thong_bao===replies[0].ma_thong_bao).da_doc,1);
+      } finally { await new Promise(resolve=>server.close(resolve)); }
     });
 
     await t.test('buy-now purchases only the chosen quantity and preserves the existing cart', async () => {

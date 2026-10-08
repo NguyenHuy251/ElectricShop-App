@@ -29,6 +29,13 @@ export async function testConnection() {
         console.log('Ensured token_version column in tai_khoan.');
       }
       await connection.query(`
+        CREATE TABLE IF NOT EXISTS staff_permissions (
+          ma_tai_khoan INT NOT NULL PRIMARY KEY,
+          permissions JSON NOT NULL,
+          FOREIGN KEY (ma_tai_khoan) REFERENCES tai_khoan(ma_tai_khoan) ON DELETE CASCADE
+        )
+      `);
+      await connection.query(`
         CREATE TABLE IF NOT EXISTS auth_sessions (
           token_hash CHAR(64) CHARACTER SET ascii COLLATE ascii_bin PRIMARY KEY,
           ma_tai_khoan INT NOT NULL,

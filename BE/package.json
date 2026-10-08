@@ -8,8 +8,13 @@
     "dev": "tsx watch src/app.ts",
     "build": "tsc -p tsconfig.json",
     "migrate": "npm run build && node scripts/migrate.mjs",
+    "migrate:auth": "npm run build && node scripts/migrate-auth.mjs",
+    "migrate:permissions": "npm run build && node scripts/migrate-permissions.mjs",
+    "migrate:collations": "npm run build && node scripts/migrate-collations.mjs",
     "start": "node dist/app.js",
-    "seed": "node scripts/seed-demo-data.mjs"
+    "seed": "node scripts/seed-demo-data.mjs",
+    "seed:options": "npm run build && node scripts/seed-product-options.mjs --apply",
+    "seed:specifications": "npm run build && node scripts/seed-product-specifications.mjs"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

@@ -2,15 +2,15 @@ import { listVouchers,createVoucher,setVoucherActive,customerVouchers } from '..
 import { Router, type RequestHandler, type Response } from 'express';
 import { pool } from '../config/database.js';
 import { authenticate, type AuthRequest } from '../middleware/auth.middleware.js';
-import { authorize } from '../middleware/role.middleware.js';
+import { authorizePermission } from '../middleware/role.middleware.js';
 import { CheckoutError } from '../utils/checkout.js';
 import { resolveItem } from '../services/commerce.service.js';
 import { sendError, sendSuccess } from '../utils/response.js';
 
 const router = Router();
 router.use(authenticate);
-const staff = authorize('Admin', 'NhanVien');
-const admin = authorize('Admin');
+
+
 const run = (fn: (req: AuthRequest, res: Response) => Promise<unknown>): RequestHandler => (req, res) => {
   void fn(req as AuthRequest, res).catch(error => {
     if (!(error instanceof CheckoutError)) console.error('Shop request failed:', error);
@@ -74,11 +74,11 @@ router.get('/my-vouchers',run(async(req,res)=>{
   if (subtotal !== undefined && (typeof req.query.tam_tinh !== 'string' || !Number.isFinite(subtotal) || subtotal < 0 || subtotal > 1e15)) throw new CheckoutError(400,'Tổng tiền hàng không hợp lệ.');
   return sendSuccess(res,'Voucher của tôi',await customerVouchers(req.user!.ma_tai_khoan,subtotal));
 }));
-router.get('/vouchers',admin,run(async(_req,res)=>{
+router.get('/vouchers',authorizePermission('vouchers'),run(async(_req,res)=>{
   const rows=await listVouchers();
   return sendSuccess(res,'Mã giảm giá',rows);
 }));
-router.post('/vouchers',admin,run(async(req,res)=>{
+router.post('/vouchers',authorizePermission('vouchers'),run(async(req,res)=>{
   const code=text(req.body.ma_code,3,40).toUpperCase();
   const amount=Number(req.body.giam_tien), minimum=Number(req.body.don_toi_thieu || 0), uses=Number(req.body.so_luot);
   const start=new Date(req.body.bat_dau), end=new Date(req.body.ket_thuc);
@@ -86,7 +86,7 @@ router.post('/vouchers',admin,run(async(req,res)=>{
   await createVoucher({ma_code:code,giam_tien:amount,don_toi_thieu:minimum,so_luot:uses,bat_dau:start,ket_thuc:end});
   return sendSuccess(res,'Đã tạo mã giảm giá',null);
 }));
-router.put('/vouchers/:id',admin,run(async(req,res)=>{
+router.put('/vouchers/:id',authorizePermission('vouchers'),run(async(req,res)=>{
   if (typeof req.body.trang_thai !== 'boolean') throw new CheckoutError(400,'Trạng thái không hợp lệ.');
   await setVoucherActive(id(req.params.id),req.body.trang_thai);
   return sendSuccess(res,'Đã cập nhật mã giảm giá',null);
@@ -112,7 +112,7 @@ router.post('/orders/:id/reorder',run(async(req,res)=>{
     await connection.commit();return sendSuccess(res,'Đã thêm sản phẩm vào giỏ theo giá hiện tại',null);
   }catch(error){await connection.rollback();throw error;}finally{connection.release();}
 }));
-router.get('/reports',staff,run(async(req,res)=>{
+router.get('/reports',authorizePermission('reports'),run(async(req,res)=>{
   const date=(value:unknown)=>{
     if(value===undefined || value==='')return null;
     if(typeof value!=='string' || !/^\d{4}-\d{2}-\d{2}$/.test(value) || !Number.isFinite(Date.parse(value)) || new Date(value).toISOString().slice(0,10)!==value)throw new CheckoutError(400,'Ngày không hợp lệ.');
@@ -128,12 +128,12 @@ router.get('/reports',staff,run(async(req,res)=>{
     UNION ALL SELECT sp.ma_san_pham,sp.ten_san_pham,bt.ten_bien_the,bt.so_luong FROM san_pham_bien_the bt JOIN san_pham sp USING(ma_san_pham) WHERE bt.so_luong<=5 AND bt.trang_thai<>'NgungBan' AND sp.trang_thai<>'NgungBan'`);
   return sendSuccess(res,'Báo cáo bán hàng',{monthly,bestsellers,low_stock:lowStock});
 }));
-router.get('/inventory',staff,run(async(_req,res)=>{
+router.get('/inventory',authorizePermission('inventory'),run(async(_req,res)=>{
   const [rows]=await pool.query(`SELECT n.*,sp.ten_san_pham,bt.ten_bien_the,tk.ho_ten FROM nhap_kho n JOIN san_pham sp USING(ma_san_pham)
     LEFT JOIN san_pham_bien_the bt ON bt.ma_bien_the=n.ma_bien_the JOIN tai_khoan tk ON tk.ma_tai_khoan=n.ma_tai_khoan ORDER BY ma_nhap DESC LIMIT 500`);
   return sendSuccess(res,'Lịch sử nhập kho',rows);
 }));
-router.post('/inventory',staff,run(async(req,res)=>{
+router.post('/inventory',authorizePermission('inventory'),run(async(req,res)=>{
   const productId=id(req.body.ma_san_pham), variantId=req.body.ma_bien_the ? id(req.body.ma_bien_the) : null, quantity=id(req.body.so_luong);
   if (quantity>1e6) throw new CheckoutError(400,'Số lượng nhập quá lớn.');
   const note=req.body.ghi_chu ? text(req.body.ghi_chu,1,500) : null;

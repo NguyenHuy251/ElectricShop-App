@@ -1,6 +1,7 @@
 import type { Page } from '@playwright/test';
-export async function mockApi(page: Page, role = 'Admin', authenticated = true) {
-  const user = { ma_tai_khoan: 1, ho_ten: 'Quản trị', ten_dang_nhap: 'admin-test', email: 'admin@example.test', vai_tro: role, trang_thai: 'HoatDong' };
+export async function mockApi(page: Page, role = 'Admin', authenticated = true, permissions = ['dashboard','catalog','orders','inventory','reviews','contacts','vouchers','reports']) {
+  const groups = [['dashboard','Tổng quan'],['catalog','Danh mục sản phẩm'],['orders','Đơn hàng'],['inventory','Nhập kho'],['reviews','Đánh giá'],['contacts','Liên hệ'],['vouchers','Mã giảm giá'],['reports','Báo cáo']].map(([code,name]) => ({code,name,description:`Quản lý ${name.toLowerCase()}`}));
+  const user = { ma_tai_khoan: 1, ho_ten: 'Quản trị', ten_dang_nhap: 'admin-test', email: 'admin@example.test', vai_tro: role, trang_thai: 'HoatDong', permissions };
   const data: Record<string, Record<string, unknown>[]> = {
     'danh-muc': [{ ma_danh_muc: 8, ten_danh_muc: 'Gia dụng', trang_thai: 1, mo_ta: 'Nhà bếp' }],
     'thuong-hieu': [{ ma_thuong_hieu: 9, ten_thuong_hieu: 'Thương hiệu mẫu', quoc_gia: 'Việt Nam', mo_ta: 'Mô tả thương hiệu' }],
@@ -24,6 +25,10 @@ export async function mockApi(page: Page, role = 'Admin', authenticated = true) 
     const reply = (value: unknown, pagination?: unknown) => route.fulfill({ json: { success: true, data: value, pagination } });
     if (expired) return route.fulfill({ status: 401, json: { message: 'Phiên đăng nhập đã hết hạn' } });
     if (resource === 'auth') return reply(id === 'login' ? { token: 'mock-token', user } : user);
+    if (resource === 'permissions') {
+      if (method === 'PUT') { const account = data['tai-khoan'].find(account => Number(account.ma_tai_khoan) === Number(id)); if (account) account.permissions = body.permissions; return reply(account); }
+      return reply({ groups, presets: [{name:'Bán hàng',permissions:['orders','contacts']},{name:'Kho',permissions:['catalog','inventory']},{name:'Chăm sóc khách hàng',permissions:['contacts','reviews']}], accounts: data['tai-khoan'].filter(account => account.vai_tro === 'NhanVien').map(account => ({...account,permissions:account.permissions || []})) });
+    }
     if (resource === 'dashboard') return reply({ tong_san_pham: 1, tong_khach_hang: 1, tong_nhan_vien: 1, tong_don_hang: 1, tong_doanh_thu: 1000000, so_don_cho_xac_nhan: 1, so_don_da_xac_nhan: 0, so_don_dang_giao: 0, so_don_da_giao: 0, so_don_da_huy: 0, doanh_thu_theo_thang: [{ thang: '2026-09', doanh_thu: 1000000 }] });
     if (resource === 'danh-muc' && child === 'thong-so') return reply([{ma_thong_so:3,ten_thong_so:'Công suất',kieu_du_lieu:'TEXT',bat_buoc:false,ten_nhom:'Kỹ thuật'}]);
     const rows = data[resource] || []; const key = keys[resource]; const row = rows.find(row => Number(row[key]) === Number(id));

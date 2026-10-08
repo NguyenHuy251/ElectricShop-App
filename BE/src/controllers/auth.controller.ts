@@ -1,4 +1,6 @@
 import bcrypt from 'bcryptjs';
+import { isMobileRequest, mobileStaffMessage, rejectMobileStaff } from '../utils/mobile-access.js';
+import { loadPermissions } from '../services/permission.service.js';
 import { Request, Response } from 'express';
 import { issueSession,refreshSession,revokeSession } from '../services/session.service.js';
 import { CheckoutError } from '../utils/checkout.js';
@@ -23,8 +25,8 @@ export async function changePassword(req: AuthRequest, res: Response) {
 }
 
 export async function refresh(req:Request,res:Response){
-  try{return sendSuccess(res,'Đã gia hạn phiên',await refreshSession(req.body?.refresh_token));}
-  catch(error){return sendError(res,error instanceof CheckoutError ? error.status : 503,error instanceof CheckoutError ? error.message : 'Chưa thể gia hạn phiên.');}
+  try{return sendSuccess(res,'Đã gia hạn phiên',await refreshSession(req.body?.refresh_token,isMobileRequest(req)));}
+  catch(error){if(error instanceof CheckoutError && error.message===mobileStaffMessage)return rejectMobileStaff(res);return sendError(res,error instanceof CheckoutError ? error.status : 503,error instanceof CheckoutError ? error.message : 'Chưa thể gia hạn phiên.');}
 }
 export async function logout(req:Request,res:Response){
   try{await revokeSession(req.body?.refresh_token);return sendSuccess(res,'Đã đăng xuất',null);}
@@ -60,9 +62,7 @@ export async function register(req: Request, res: Response) {
       trang_thai: 'HoatDong',
     };
 
-    const session = await issueSession(user.ma_tai_khoan,hashedPassword);
-
-    return sendSuccess(res, 'Đăng ký thành công', { ...session, user });
+    return sendSuccess(res, 'Đăng ký thành công', { user });
   } catch (error) {
     console.error('Register error:', error);
     return sendError(res, 500, 'Lỗi khi đăng ký', [(error as Error).message]);
@@ -95,7 +95,8 @@ export async function login(req: Request, res: Response) {
       return sendError(res, 403, 'Tài khoản đang bị khóa');
     }
 
-    const session = await issueSession(user.ma_tai_khoan,user.mat_khau);
+    if (isMobileRequest(req) && user.vai_tro === 'NhanVien') return rejectMobileStaff(res);
+    const session = await issueSession(user.ma_tai_khoan,user.mat_khau,undefined,isMobileRequest(req));
 
     const safeUser = {
       ma_tai_khoan: user.ma_tai_khoan,
@@ -106,11 +107,13 @@ export async function login(req: Request, res: Response) {
       dia_chi: user.dia_chi,
       vai_tro: user.vai_tro,
       trang_thai: user.trang_thai,
+      permissions: await loadPermissions(user.ma_tai_khoan, user.vai_tro),
     };
 
     return sendSuccess(res, 'Đăng nhập thành công', { ...session, user: safeUser });
   } catch (error) {
     console.error('Login error:', error);
+    if(error instanceof CheckoutError && error.message===mobileStaffMessage)return rejectMobileStaff(res);
     if ((error as { code?: string }).code === 'ER_ACCESS_DENIED_ERROR') {
       return sendError(res, 503, 'Backend chưa kết nối được MySQL. Kiểm tra DB_USER và DB_PASSWORD trong file .env');
     }
@@ -131,7 +134,7 @@ export async function me(req: AuthRequest, res: Response) {
       return sendError(res, 404, 'Không tìm thấy người dùng');
     }
 
-    return sendSuccess(res, 'Lấy thông tin người dùng thành công', user);
+    return sendSuccess(res, 'Lấy thông tin người dùng thành công', { ...user, permissions: req.user.permissions || [] });
   } catch (error) {
     console.error('Me error:', error);
     return sendError(res, 500, 'Lỗi khi lấy thông tin người dùng', [(error as Error).message]);

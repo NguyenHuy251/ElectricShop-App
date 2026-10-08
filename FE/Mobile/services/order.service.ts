@@ -22,4 +22,8 @@ export const orderService = {
     const response = await api.put(`/don-hang/${id}/huy`);
     return response.data;
   },
+  confirmReceipt: async (id: number) => {
+    const response = await api.put(`/don-hang/${id}/xac-nhan-nhan-hang`);
+    return response.data;
+  },
 };

@@ -1,30 +1,35 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { Link, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { cartService } from '../../services/cart.service';
 import { productService } from '../../services/product.service';
+import { categoryService, type Category } from '../../services/category.service';
 import type { Product } from '../../types';
 import { EmptyState, LoadingState, ProductCard } from '@/components/shop-ui';
 import { shop } from '@/constants/shop-theme';
 import { getApiMessage } from '@/utils/format';
+import { getCategoryIcon } from '@/constants/category-icons';
 
-const fallbackCategories = [
-  { label: 'Nhà bếp', icon: 'kitchen' as const, color: '#EAF5FF' },
-  { label: 'Vệ sinh', icon: 'cleaning-services' as const, color: '#FFF2E8' },
-  { label: 'Phòng khách', icon: 'weekend' as const, color: '#F2EEFF' },
-  { label: 'Chăm sóc', icon: 'health-and-safety' as const, color: '#EAF8F0' },
-];
+const categoryColors = ['#EAF5FF', '#FFF2E8', '#F2EEFF', '#EAF8F0'];
 
 export default function HomeScreen() {
   const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [categoryError, setCategoryError] = useState('');
   const [cartCount, setCartCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   const loadHome = useCallback(async () => {
     setError('');
+    const categoriesRequest = categoryService.getCategories().then(data => {
+      setCategories(data); setCategoryError('');
+    }).catch(err => {
+      setCategories([]); setCategoryError(getApiMessage(err, 'Chưa tải được danh mục.'));
+    });
     try {
       const response = await productService.getProducts({ limit: 4 });
       setProducts(response.data || []);
@@ -41,6 +46,7 @@ export default function HomeScreen() {
     } catch {
       setCartCount(0);
     }
+    await categoriesRequest;
   }, []);
 
   useFocusEffect(useCallback(() => {
@@ -83,12 +89,13 @@ export default function HomeScreen() {
         <View style={styles.promise}><MaterialIcons name="electric-bolt" size={18} color={shop.primary} /><Text style={styles.promiseText}>Tiện ích cho nhà · Cảm hứng cho cuộc sống</Text></View>
         <Link href="/vouchers" asChild><Pressable accessibilityRole="button" accessibilityLabel="Voucher" style={styles.bottomBanner}><MaterialIcons name="local-offer" size={28} color={shop.primary} /><View style={{ flex: 1 }}><Text style={styles.bottomTitle}>Voucher</Text><Text style={styles.bottomText}>Xem mã giảm giá dành cho bạn</Text></View><MaterialIcons name="chevron-right" size={24} color={shop.primary} /></Pressable></Link>
         <SectionHeader title="Góc nhà của bạn" action="Xem tất cả" href="/products" />
+        {categoryError ? <Text style={styles.searchText}>{categoryError}</Text> : null}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryRow}>
-          {Array.from(new Set(products.map(p => p.ten_danh_muc).filter((name): name is string => Boolean(name)))).map((label, index) => ({ ...fallbackCategories[index % fallbackCategories.length], label })).map((category) => (
-            <Link href={{ pathname: '/products', params: { category: category.label } }} key={category.label} asChild>
+          {categories.map((item, index) => ({ ...item, icon: getCategoryIcon(item.ten_danh_muc), color: categoryColors[index % categoryColors.length] })).map((category) => (
+            <Link href={{ pathname: '/products', params: { categoryId: String(category.ma_danh_muc) } }} key={category.ma_danh_muc} asChild>
               <Pressable style={styles.category}>
-                <View style={[styles.categoryIcon, { backgroundColor: category.color }]}><MaterialIcons name={category.icon} size={26} color="#183C35" /></View>
-                <Text style={styles.categoryLabel}>{category.label}</Text>
+                <View style={[styles.categoryIcon, { backgroundColor: category.color }]}><MaterialCommunityIcons name={category.icon} size={28} color="#183C35" /></View>
+                <Text style={styles.categoryLabel}>{category.ten_danh_muc}</Text>
               </Pressable>
             </Link>
           ))}

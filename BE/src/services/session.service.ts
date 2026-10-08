@@ -2,9 +2,10 @@ import { createHash, randomBytes } from 'node:crypto';
 import { pool } from '../config/database.js';
 import { signToken } from '../utils/jwt.js';
 import { CheckoutError } from '../utils/checkout.js';
+import { mobileStaffMessage } from '../utils/mobile-access.js';
 
 const hash=(token:string)=>createHash('sha256').update(token).digest('hex');
-export async function issueSession(accountId:number,expectedPassword?:string,previousToken?:string){
+export async function issueSession(accountId:number,expectedPassword?:string,previousToken?:string,mobile=false){
   const connection=await pool.getConnection();
   try{
     await connection.beginTransaction();
@@ -21,6 +22,7 @@ export async function issueSession(accountId:number,expectedPassword?:string,pre
     }
     const user=(rows as {ma_tai_khoan:number;ten_dang_nhap:string;vai_tro:string;trang_thai:string;mat_khau:string;token_version:number}[])[0];
     if(!user || user.trang_thai!=='HoatDong' || (expectedPassword && expectedPassword!==user.mat_khau))throw new CheckoutError(401,'Phiên đăng nhập không hợp lệ.');
+    if(mobile && user.vai_tro==='NhanVien')throw new CheckoutError(403,mobileStaffMessage);
     if(previousToken){
       try {
         const [sessions]=await connection.query('SELECT token_version FROM auth_sessions WHERE token_hash=? AND ma_tai_khoan=? AND expires_at>NOW() FOR UPDATE',[hash(previousToken),accountId]);
@@ -54,12 +56,12 @@ export async function issueSession(accountId:number,expectedPassword?:string,pre
     await connection.commit();return {token,refresh_token:refreshToken};
   }catch(error){await connection.rollback();throw error;}finally{connection.release();}
 }
-export async function refreshSession(token:unknown){
+export async function refreshSession(token:unknown,mobile=false){
   if(typeof token!=='string' || !/^[a-f0-9]{64}$/.test(token))throw new CheckoutError(401,'Refresh token không hợp lệ.');
   const [rows]=await pool.query('SELECT ma_tai_khoan FROM auth_sessions WHERE token_hash=?',[hash(token)]);
   const session=(rows as {ma_tai_khoan:number}[])[0];
   if(!session)throw new CheckoutError(401,'Phiên đăng nhập đã hết hạn.');
-  return issueSession(session.ma_tai_khoan,undefined,token);
+  return issueSession(session.ma_tai_khoan,undefined,token,mobile);
 }
 export async function revokeSession(token:unknown){
   if(typeof token==='string' && /^[a-f0-9]{64}$/.test(token))await pool.execute('DELETE FROM auth_sessions WHERE token_hash=?',[hash(token)]);

@@ -1,10 +1,20 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from './api';
+import { isMobileStaff, mobileStaffMessage } from '../utils/mobile-access';
 
 export const authService = {
+  forgotPassword: async (payload: { email: string; so_dien_thoai: string }) => {
+    const response = await api.post('/auth/forgot-password', payload);
+    return response.data;
+  },
   login: async (ten_dang_nhap: string, mat_khau: string) => {
     const response = await api.post('/auth/login', { ten_dang_nhap, mat_khau });
     const { token, user, refresh_token } = response.data.data;
+    if (isMobileStaff(user)) {
+      if (refresh_token) await api.post('/auth/logout', { refresh_token }).catch(() => undefined);
+      await AsyncStorage.multiRemove(['token', 'refresh_token', 'user']);
+      throw new Error(mobileStaffMessage);
+    }
     await AsyncStorage.setItem('token', token);
     if(refresh_token)await AsyncStorage.setItem('refresh_token',refresh_token);
     await AsyncStorage.setItem('user', JSON.stringify(user));
@@ -13,10 +23,6 @@ export const authService = {
 
   register: async (payload: Record<string, any>) => {
     const response = await api.post('/auth/register', payload);
-    const { token, user, refresh_token } = response.data.data;
-    await AsyncStorage.setItem('token', token);
-    if(refresh_token)await AsyncStorage.setItem('refresh_token',refresh_token);
-    await AsyncStorage.setItem('user', JSON.stringify(user));
     return response.data;
   },
 

@@ -1,6 +1,10 @@
 import api from './api';
 
 export const cartService = {
+  selectVariant: async (ma_san_pham: number, new_ma_bien_the: number, ma_bien_the?: number | null) => {
+    const response = await api.put(`/gio-hang/${ma_san_pham}/variant`, { ma_bien_the: ma_bien_the ?? null, new_ma_bien_the });
+    return response.data;
+  },
   getCart: async () => {
     const response = await api.get('/gio-hang');
     return response.data;

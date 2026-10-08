@@ -44,6 +44,8 @@ Hệ thống **ElectricShop** được xây dựng nhằm cung cấp giải phá
   - Nhóm chức năng tương tác: **Gửi liên hệ cho cửa hàng**, **Phản hồi của tôi**.
   - Nhóm bảo mật: **Đổi mật khẩu**, **Đăng xuất**.
 
+**Quên mật khẩu:** tại màn hình đăng nhập mobile, bấm **Quên mật khẩu?**, nhập email và số điện thoại đã đăng ký cùng một tài khoản khách hàng đang hoạt động. Khi thông tin khớp, hệ thống đặt mật khẩu thành `12345678`, hiển thị mật khẩu mới và nút **Đăng nhập ngay**, đồng thời thu hồi mọi phiên cũ. Sai thông tin không làm thay đổi mật khẩu. API `POST /api/auth/forgot-password` giới hạn 5 yêu cầu/15 phút theo IP; không đặt lại tài khoản Admin/Nhân viên bằng luồng này.
+
 ### 2.2. Chi tiết sản phẩm & Bộ chọn biến thể đa tầng thông minh (`product/[id]`)
 - **Hiển thị sản phẩm:** Hình ảnh chất lượng cao hỗ trợ chế độ xem phóng to (Zoom Modal), giá bán, tình trạng còn hàng/hết hàng, chính sách bảo hành chính hãng.
 - **Cơ chế chọn biến thể đa tầng (Variant Selector):**
@@ -73,13 +75,18 @@ Hệ thống **ElectricShop** được xây dựng nhằm cung cấp giải phá
   - Cho phép khách hàng chủ động **Hủy đơn hàng** trực tiếp khi đơn đang ở trạng thái *Chờ xác nhận* (hệ thống tự động hoàn lại tồn kho nguyên tử).
 - **Chi tiết & Tiến trình đơn hàng (`order/[id]`)**:
   - Dòng thời gian tiến trình đơn hàng trực quan từng bước (● Chờ xác nhận ➔ ● Đã xác nhận ➔ ● Đang giao ➔ ● Đã giao).
+  - **Xác nhận đã nhận hàng:** Khi đơn đang giao, người đặt đơn bấm nút và xác nhận trong hộp thoại để chuyển đơn sang *Đã giao*, mở quyền đánh giá. Backend kiểm tra chủ đơn và trạng thái trong giao dịch có khóa; xác nhận lặp không tạo cập nhật trùng. Web Admin không được chuyển đơn trực tiếp sang *Đã giao*.
   - Chi tiết từng sản phẩm, biến thể, đơn giá, số lượng và thành tiền.
+  - Nút **Xem chi tiết sản phẩm** mở/thu gọn thông tin ngay trong đơn: mã sản phẩm, SKU biến thể, danh mục, thương hiệu, bảo hành và thông số kỹ thuật của đúng biến thể đã chọn. Thông tin danh mục/thông số được ghi rõ là dữ liệu hiện tại; số lượng và giá lấy từ đơn hàng. Sản phẩm không còn trong danh mục vẫn hiển thị thông tin đã đặt.
   - **Viết đánh giá sản phẩm:** Khi đơn hàng đạt trạng thái *Đã giao*, hệ thống kích hoạt form chấm điểm sao (1 - 5 sao) và viết nhận xét thực tế cho từng sản phẩm trong đơn.
 
 ### 2.5. Tiện ích tài khoản & Tương tác khách hàng
 - **Sổ địa chỉ (`account-tools`):** Thêm mới nhiều địa chỉ giao hàng, chỉnh sửa, xóa và thiết lập một địa chỉ làm mặc định.
 - **Hộp thư thông báo (`account-tools`):** Nhận thông báo tự động theo thời gian thực mỗi khi đơn hàng được tạo mới, khi đơn hàng thay đổi trạng thái vận chuyển, hoặc khi cửa hàng phản hồi tin nhắn liên hệ.
 - **Kênh liên hệ hỗ trợ (`contact` & `contact-history`):** Khách hàng gửi yêu cầu tư vấn/khiếu nại bảo hành; theo dõi lịch sử và đọc nội dung phản hồi trực tiếp từ nhân viên cửa hàng.
+  - Liên hệ gửi với phiên đăng nhập được gắn tài khoản từ token; danh sách *Phản hồi của tôi* chỉ trả liên hệ của chính tài khoản đó.
+  - Gửi thành công giữ nguyên trang, xóa toàn bộ ô nhập và hiện thông báo thành công cùng nút xem phản hồi; khi gửi lỗi giữ lại nội dung để thử lại.
+  - Khi Web Admin trả lời, trạng thái và nội dung phản hồi lưu trong cùng một cập nhật; trigger tạo thông báo cho người gửi khi nội dung trả lời thay đổi. Mobile kiểm tra thông báo mỗi 15 giây khi ứng dụng ở foreground, hiện banner **Xem phản hồi** và đánh dấu đã đọc khi mở/đóng. Trang phản hồi tự tải lại khi mở, khi quay lại ứng dụng và mỗi 15 giây lúc đang xem. Đây là thông báo trong ứng dụng, không phải push khi ứng dụng đã đóng.
 
 ---
 
@@ -93,6 +100,10 @@ Giao diện quản trị xây dựng bằng **React (Vite) + Ant Design**, thi�
 - Bảng danh sách đơn hàng mới cần xử lý gấp và thông báo tồn kho.
 
 ### 3.2. Quản lý Sản phẩm & Biến thể (`ProductsPage`)
+
+**Dữ liệu mẫu mở rộng:** chạy `npm run seed:options` trong `BE` để thêm 5 biến thể cho mỗi sản phẩm hiện có và bổ sung tối thiểu 6 thông số theo danh mục. Biến thể cùng màu được phân biệt bằng công suất, dung tích, khối lượng hoặc thông số phù hợp từng loại thiết bị. Giá, số lượng và thông số mới là dữ liệu giả lập, không phải thông số do nhà sản xuất xác nhận. Script lưu bản sao trước thay đổi trong `BE/logs`, giữ nguyên biến thể/thông số cũ và tránh tạo trùng SKU khi chạy lại.
+
+Chạy `npm run seed:specifications` để bổ sung lên 10 thông số cho mỗi sản phẩm và cập nhật thông số chung vào các biến thể, giữ nguyên màu/công suất/dung tích riêng, giá và tồn kho. Dữ liệu bổ sung phục vụ minh họa; bản sao trước thay đổi được lưu trong `BE/logs`.
 - **Quản lý danh sách:** Tìm kiếm sản phẩm theo tên/mã code, lọc theo danh mục, thương hiệu, trạng thái bán (Đang bán, Hết hàng, Ngừng bán).
 - **Thêm mới / Chỉnh sửa sản phẩm:**
   - Thông tin cơ bản: Tên sản phẩm, mã SKU/Code, danh mục, thương hiệu, giá nhập, giá bán, bảo hành, mô tả chi tiết.
@@ -116,9 +127,11 @@ Giao diện quản trị xây dựng bằng **React (Vite) + Ant Design**, thi�
 
 ### 3.5. Quản lý & Xử lý Đơn hàng (`OrdersPage`)
 - Danh sách đơn hàng toàn hệ thống với bộ lọc theo trạng thái, ngày đặt, khách hàng.
+- **Chi tiết sản phẩm trong đơn:** Hiển thị ảnh và cho mở/thu gọn từng dòng sản phẩm để xem biến thể đã đặt, số lượng, đơn giá, thành tiền cùng mã sản phẩm/SKU, thương hiệu, danh mục, bảo hành và thông số hiện tại. Nhân viên có quyền Đơn hàng được xem trực tiếp, không cần quyền quản lý danh mục sản phẩm.
 - **Quy trình duyệt đơn nghiêm ngặt:** Chuyển trạng thái theo đúng luồng nghiệp vụ:
   $$\text{Chờ xác nhận} \longrightarrow \text{Đã xác nhận} \longrightarrow \text{Đang giao} \longrightarrow \text{Đã giao}$$
   hoặc **Hủy đơn** ở giai đoạn thích hợp.
+  Bước chuyển từ *Đang giao* sang *Đã giao* chỉ do người đặt đơn xác nhận đã nhận hàng trên Mobile; Web Admin chỉ xác nhận đơn, bắt đầu giao hoặc hủy theo luồng cho phép.
 - **In phiếu giao hàng:** Tạo mẫu phiếu in chuyên nghiệp hiển thị đầy đủ thông tin khách hàng, số điện thoại, địa chỉ, bảng chi tiết sản phẩm/biến thể và tổng thanh toán COD.
 - **Xuất báo cáo Excel:** Xuất toàn bộ dữ liệu đơn hàng phục vụ công tác kế toán và đối soát.
 
@@ -148,6 +161,19 @@ Giao diện quản trị xây dựng bằng **React (Vite) + Ant Design**, thi�
 ### 3.10. Kiểm duyệt Đánh giá & Hỗ trợ Khách hàng (`ReviewsPage`, `ContactsPage`)
 - **Kiểm duyệt Đánh giá:** Quản lý toàn bộ phản hồi, số sao đánh giá sản phẩm của người dùng; quyền xóa các nhận xét mang tính spam hoặc vi phạm quy chuẩn.
 - **Chăm sóc khách hàng (Hộp thư liên hệ):** Tiếp nhận các câu hỏi, phản ánh của khách hàng; soạn nội dung phản hồi chính thức; cập nhật trạng thái đã phản hồi và kích hoạt thông báo tự động tới app của khách.
+
+### 3.11. Phân quyền tích hợp trong tab Nhân viên (`EmployeesPage`)
+- Admin mở tab **Nhân viên**, bấm **Phân quyền** ngay trên hồ sơ đã liên kết tài khoản; form cấu hình mở tại chỗ và cột **Quyền nghiệp vụ** cập nhật sau khi lưu.
+- Nút **Phân quyền tài khoản** cho phép chọn mọi tài khoản nhân viên, kể cả tài khoản chưa liên kết hồ sơ. Không có menu Phân quyền riêng; đường dẫn cũ `/permissions` chuyển về tab Nhân viên.
+- Có 8 nhóm độc lập: Tổng quan, Danh mục sản phẩm (gồm sản phẩm/biến thể/danh mục/thương hiệu/thông số), Đơn hàng, Nhập kho, Đánh giá, Liên hệ, Mã giảm giá, Báo cáo.
+- Mẫu **Bán hàng** cấp Đơn hàng + Liên hệ; **Kho** cấp Danh mục sản phẩm + Nhập kho; **Chăm sóc khách hàng** cấp Liên hệ + Đánh giá. Admin có thể chọn thêm/bớt từng nhóm hoặc bỏ toàn bộ.
+- Nhân viên được thêm/sửa/xóa trong nhóm được cấp, theo các thao tác và quy tắc nghiệp vụ có sẵn. Đơn hàng chỉ được xóa khi đã giao hoặc đã hủy; dữ liệu đang được tham chiếu vẫn tuân thủ ràng buộc database.
+- Quản lý tài khoản, nhân sự và cấp quyền chỉ dành cho Admin, kể cả khi nhân viên được cấp mọi nhóm nghiệp vụ.
+- Tài khoản nhân viên mới hoặc chưa cấu hình quyền chỉ vào được trang tài khoản cá nhân. Admin cần cấp quyền trước khi nhân viên vận hành cửa hàng.
+- Tài khoản `NhanVien` chỉ sử dụng web admin; mobile chặn đăng nhập và tự xóa phiên nhân viên đã lưu. Backend chặn cả đăng nhập, gia hạn phiên và yêu cầu đã xác thực từ mobile bằng mã `MOBILE_STAFF_FORBIDDEN`. Khách hàng và Admin giữ quyền sử dụng mobile hiện có.
+- Backend đọc quyền từ database ở mỗi yêu cầu, nên thu hồi quyền chặn ngay cả token cũ. Menu cập nhật khi tải lại, quay lại cửa sổ, định kỳ 30 giây hoặc khi API trả lỗi thiếu quyền.
+- Nhân viên không được cấp nhóm Đơn hàng chỉ xem được đơn mua của chính mình qua API mua sắm; không xem đơn của khách hàng khác.
+- Cài đặt database: chạy `npm run migrate:permissions` tại thư mục `BE`; lệnh có thể chạy lại và không sửa dữ liệu tài khoản hiện có.
 
 ---
 
@@ -181,27 +207,30 @@ Cơ sở dữ liệu tích hợp các Trigger tự động phục vụ trải ng
 
 ## 5. MA TRẬN PHÂN QUYỀN HỆ THỐNG (RBAC)
 
+**Theo quyền** nghĩa là Admin đã cấp nhóm nghiệp vụ tương ứng. Cột Nhân viên mô tả các trang quản trị; các API danh mục/sản phẩm công khai vẫn phục vụ ứng dụng mua sắm.
+
 | Chức năng / Quyền hạn | Khách hàng (App) | Nhân viên (Admin) | Quản trị viên (Admin) |
 |---|:---:|:---:|:---:|
-| Xem danh mục, thương hiệu, sản phẩm | ✅ | ✅ | ✅ |
+| Xem danh mục, thương hiệu, sản phẩm | ✅ | Theo quyền `catalog` | ✅ |
 | Lọc & chọn biến thể sản phẩm | ✅ | ✅ | ✅ |
 | Thêm giỏ hàng, Mua ngay, Thanh toán COD | ✅ | ❌ | ❌ |
 | Áp dụng mã giảm giá (Voucher) | ✅ | ❌ | ❌ |
 | Theo dõi tiến trình & Hủy đơn hàng của mình | ✅ | ❌ | ❌ |
 | Đánh giá sản phẩm đã mua | ✅ | ❌ | ❌ |
 | Gửi liên hệ & Nhận thông báo hệ thống | ✅ | ❌ | ❌ |
-| Xem bảng điều khiển & Thống kê doanh thu | ❌ | ❌ | ✅ |
-| Quản lý Đơn hàng (Duyệt, Đổi trạng thái, In phiếu) | ❌ | ✅ | ✅ |
-| Lập phiếu nhập kho & Xem lịch sử kho | ❌ | ✅ | ✅ |
-| Tiếp nhận & Phản hồi liên hệ khách hàng | ❌ | ✅ | ✅ |
-| Quản lý Sản phẩm, Biến thể, Đa ảnh | ❌ | ❌ | ✅ |
-| Quản lý Cây thông số kỹ thuật động | ❌ | ❌ | ✅ |
-| Quản lý Danh mục & Thương hiệu | ❌ | ❌ | ✅ |
-| Tạo & Phát hành Voucher khuyến mãi | ❌ | ❌ | ✅ |
+| Xem bảng điều khiển & Thống kê doanh thu | ❌ | Theo quyền `dashboard` | ✅ |
+| Quản lý Đơn hàng (Duyệt, Đổi trạng thái, In phiếu, Xóa) | ❌ | Theo quyền `orders` | ✅ |
+| Lập phiếu nhập kho & Xem lịch sử kho | ❌ | Theo quyền `inventory` | ✅ |
+| Tiếp nhận, Phản hồi & Xóa liên hệ khách hàng | ❌ | Theo quyền `contacts` | ✅ |
+| Quản lý Sản phẩm, Biến thể, Đa ảnh | ❌ | Theo quyền `catalog` | ✅ |
+| Quản lý Cây thông số kỹ thuật động | ❌ | Theo quyền `catalog` | ✅ |
+| Quản lý Danh mục & Thương hiệu | ❌ | Theo quyền `catalog` | ✅ |
+| Tạo & Phát hành Voucher khuyến mãi | ❌ | Theo quyền `vouchers` | ✅ |
 | Quản lý Nhân sự & Bảng lương nhân viên | ❌ | ❌ | ✅ |
 | Quản lý Tài khoản & Phân quyền vai trò | ❌ | ❌ | ✅ |
-| Kiểm duyệt & Xóa đánh giá | ❌ | ✅ | ✅ |
-| Xuất dữ liệu báo cáo ra file Excel | ❌ | ✅ | ✅ |
+| Kiểm duyệt & Xóa đánh giá | ❌ | Theo quyền `reviews` | ✅ |
+| Xem, In & Xuất báo cáo ra file Excel | ❌ | Theo quyền `reports` | ✅ |
+| Cấp hoặc thu hồi nhóm quyền cho nhân viên | ❌ | ❌ | ✅ |
 
 ---
 
@@ -209,6 +238,7 @@ Cơ sở dữ liệu tích hợp các Trigger tự động phục vụ trải ng
 
 1. `tai_khoan`: Quản lý thông tin đăng nhập, vai trò, trạng thái khóa, `token_version`.
 2. `nhan_vien`: Hồ sơ nhân sự, chức vụ, tiền lương, ngày vào làm.
+   - `staff_permissions`: Quyền nghiệp vụ của từng tài khoản nhân viên; danh sách JSON các mã nhóm quyền, tự xóa khi tài khoản bị xóa.
 3. `danh_muc`: Phân loại nhóm thiết bị gia dụng.
 4. `thuong_hieu`: Các hãng sản xuất và xuất xứ thương hiệu.
 5. `san_pham`: Bảng sản phẩm chính, giá niêm yết, tồn kho tổng, bảo hành, ảnh đại diện.

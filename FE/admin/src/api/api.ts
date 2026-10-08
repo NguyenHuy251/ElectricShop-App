@@ -37,6 +37,7 @@ api.interceptors.response.use(
     response.data=resolveImages(response.data);return response;
   },
   async (error) => {
+    if (error.response?.status === 403 && error.config?.url !== '/auth/me') window.dispatchEvent(new Event('admin:permissions-changed'));
     if (error.response?.status === 401 && error.config?.url !== '/auth/login') {
       if(error.config && !error.config._retried && !['/auth/refresh','/auth/logout'].includes(error.config.url)){
         error.config._retried=true;

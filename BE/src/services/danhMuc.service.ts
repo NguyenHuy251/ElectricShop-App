@@ -1,4 +1,5 @@
 import { callProcedure, firstResult } from './procedure.service.js';
+import { pool } from '../config/database.js';
 
 export const danhMucProcedures = {
   list: 'sp_danh_muc_list',
@@ -10,6 +11,12 @@ export const danhMucProcedures = {
 
 export const danhMucService = {
   list: () => callProcedure(danhMucProcedures.list).then(firstResult),
+  listWithProducts: async () => {
+    const [rows] = await pool.query(`SELECT dm.* FROM danh_muc dm
+      WHERE EXISTS (SELECT 1 FROM san_pham sp WHERE sp.ma_danh_muc=dm.ma_danh_muc)
+      ORDER BY dm.ma_danh_muc DESC`);
+    return rows;
+  },
   getById: (id: number) => callProcedure(danhMucProcedures.getById, [id]).then(firstResult),
   create: (params: unknown[]) => callProcedure(danhMucProcedures.create, params).then(firstResult),
   update: (params: unknown[]) => callProcedure(danhMucProcedures.update, params).then(firstResult),

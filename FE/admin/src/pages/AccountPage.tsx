@@ -1,4 +1,4 @@
-import { App, Button, Card, Form, Input } from 'antd';
+import { Alert, App, Button, Card, Form, Input } from 'antd';
 import { useState } from 'react';
 import { api } from '../api/api';
 import { useAuth } from '../auth/AuthContext';
@@ -14,7 +14,7 @@ export default function AccountPage() {
     try{await api.put(url,values);message.success('Đã lưu thay đổi');if(url==='/auth/me')await restore();else {passwordForm.resetFields();logout();}}
     catch(err){message.error(errorMessage(err));}finally{setBusy(false);}
   };
-  return <><h1 className="page-title">Tài khoản của tôi</h1><Card title="Hồ sơ"><Form layout="vertical" initialValues={user || {}} onFinish={v=>save('/auth/me',v)}>
+  return <><h1 className="page-title">Tài khoản của tôi</h1>{user?.vai_tro === 'NhanVien' && !user.permissions?.length && <Alert type="info" showIcon message="Tài khoản chưa được cấp quyền nghiệp vụ. Hãy liên hệ quản trị viên để được phân quyền." style={{ marginBottom: 20 }} />}<Card title="Hồ sơ"><Form layout="vertical" initialValues={user || {}} onFinish={v=>save('/auth/me',v)}>
     <Form.Item name="ho_ten" label="Họ tên" rules={[{required:true,max:100}]}><Input/></Form.Item>
     <Form.Item name="email" label="Email" rules={[{required:true,type:'email'}]}><Input/></Form.Item>
     <Form.Item name="so_dien_thoai" label="Điện thoại"><Input maxLength={15}/></Form.Item><Form.Item name="dia_chi" label="Địa chỉ"><Input maxLength={255}/></Form.Item>

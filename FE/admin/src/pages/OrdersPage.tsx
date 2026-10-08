@@ -1,14 +1,14 @@
 import { useCallback, useRef, useState } from 'react';
-import { App, Button, Descriptions, Drawer, Empty, Input, Select, Space, Table, Tooltip } from 'antd';
+import { App, Button, Descriptions, Drawer, Empty, Image, Input, Select, Space, Table, Tooltip } from 'antd';
 import { DeleteOutlined, EyeOutlined, ReloadOutlined } from '@ant-design/icons';
 import { orderApi } from '../api/order.api';
 import { useLoad } from '../hooks/useLoad';
 import LoadError from '../components/LoadError';
 import { errorMessage } from '../utils/errors';
 import { dateTime, labels, money, options, Status } from '../utils/format';
-import type { Order } from '../types';
+import type { Order, OrderItem } from '../types';
 import { exportExcel,printOrder } from '../utils/export';
-export const transitions: Record<Order['trang_thai'], Order['trang_thai'][]> = { ChoXacNhan: ['DaXacNhan', 'DaHuy'], DaXacNhan: ['DangGiao', 'DaHuy'], DangGiao: ['DaGiao', 'DaHuy'], DaGiao: [], DaHuy: [] };
+export const transitions: Record<Order['trang_thai'], Order['trang_thai'][]> = { ChoXacNhan: ['DaXacNhan', 'DaHuy'], DaXacNhan: ['DangGiao', 'DaHuy'], DangGiao: ['DaHuy'], DaGiao: [], DaHuy: [] };
 export default function OrdersPage() {
   const { message, modal } = App.useApp();
   const result = useLoad(useCallback(() => orderApi.list(), []));
@@ -29,5 +29,42 @@ export default function OrdersPage() {
       ['Tiền hàng', money(detail.tam_tinh ?? Number(detail.tong_tien) + Number(detail.giam_gia || 0) - Number(detail.phi_giao_hang || 0))],
       ['Mã giảm giá', detail.ma_code || (detail.ma_voucher ? `Voucher #${detail.ma_voucher}` : 'Không áp dụng')],
       ['Giảm giá', money(detail.giam_gia || 0)], ['Phí giao hàng', money(detail.phi_giao_hang || 0)], ['Tổng thanh toán', money(detail.tong_tien)],
-    ].map(([label, children]) => ({ key: String(label), label, children: children || '—' }))} /><Table className="mt" rowKey={row=>`${row.ma_san_pham}:${row.ma_bien_the || 0}`} dataSource={detail.items || []} pagination={false} scroll={{ x: 500 }} columns={[{ title: 'Sản phẩm', dataIndex: 'ten_san_pham' }, { title: 'Biến thể', dataIndex: 'ten_bien_the', render: value => value || '—' }, { title: 'Số lượng', dataIndex: 'so_luong' }, { title: 'Đơn giá', dataIndex: 'don_gia', render: money }, { title: 'Thành tiền', dataIndex: 'thanh_tien', render: money }]} /></>}</Drawer></>;
+    ].map(([label, children]) => ({ key: String(label), label, children: children || '—' }))} />
+    <h3 className="mt">Sản phẩm đã đặt</h3>
+    {detail.trang_thai === 'DangGiao' ? <p style={{color:'#176B52'}}>Đang chờ khách hàng xác nhận đã nhận hàng trên ứng dụng. Đơn sẽ chuyển sang Đã giao sau khi khách xác nhận.</p> : null}
+    <Table<OrderItem> key={detail.ma_don_hang} rowKey={row=>`${row.ma_san_pham}:${row.ma_bien_the || 0}`} dataSource={detail.items || []} pagination={false} scroll={{ x: 650 }}
+      expandable={{ expandedRowRender: row => <OrderedProductDetails item={row} />, columnWidth: 150,
+        expandIcon: ({ expanded, onExpand, record }) => <Button type="link" size="small" aria-expanded={expanded} onClick={event => onExpand(record, event)}>{expanded ? 'Thu gọn chi tiết' : 'Xem chi tiết sản phẩm'}</Button> }}
+      columns={[
+        { title: 'Sản phẩm', render: (_, row) => <Space align="start">{row.hinh_anh ? <Image src={row.hinh_anh} alt={row.ten_san_pham} width={48} height={48} style={{objectFit:'contain',borderRadius:8}} /> : <span style={{color:'#84938B'}}>Không có ảnh</span>}<span>{row.ten_san_pham}</span></Space> },
+        { title: 'Biến thể', dataIndex: 'ten_bien_the', render: value => value || 'Tiêu chuẩn' },
+        { title: 'Số lượng', dataIndex: 'so_luong' }, { title: 'Đơn giá', dataIndex: 'don_gia', render: money },
+        { title: 'Thành tiền', render: (_,row) => money(row.thanh_tien ?? Number(row.don_gia)*row.so_luong) },
+      ]} /></>}</Drawer></>;
+}
+
+function OrderedProductDetails({ item }: { item: OrderItem }) {
+  const details = item.product_details;
+  return <div style={{padding:16,background:'#fff',borderRadius:12}}>
+    <h4 style={{marginTop:0}}>Thông tin sản phẩm đã đặt</h4>
+    <Descriptions size="small" column={1} bordered items={[
+      {key:'name',label:'Sản phẩm',children:item.ten_san_pham},
+      {key:'variant',label:'Biến thể',children:item.ten_bien_the || 'Tiêu chuẩn'},
+      {key:'quantity',label:'Số lượng',children:item.so_luong},
+      {key:'price',label:'Đơn giá khi đặt',children:money(item.don_gia)},
+      {key:'total',label:'Thành tiền',children:money(item.thanh_tien ?? Number(item.don_gia)*item.so_luong)},
+    ]} />
+    {details ? <>
+      <h4>Thông tin danh mục hiện tại</h4>
+      <Descriptions size="small" column={1} bordered items={[
+        {key:'code',label:'Mã sản phẩm',children:details.ma_san_pham_code || '—'},
+        {key:'sku',label:'SKU biến thể',children:details.ma_sku || '—'},
+        {key:'category',label:'Danh mục',children:details.ten_danh_muc || '—'},
+        {key:'brand',label:'Thương hiệu',children:details.ten_thuong_hieu || '—'},
+        {key:'warranty',label:'Bảo hành',children:details.bao_hanh == null ? '—' : `${details.bao_hanh} tháng`},
+      ]} />
+      <h4>Thông số hiện tại của sản phẩm / biến thể</h4>
+      {details.thong_so_ky_thuat.length ? <Descriptions size="small" column={1} bordered items={details.thong_so_ky_thuat.map(spec=>({key:String(spec.ma_thong_so),label:spec.ten_thong_so,children:spec.gia_tri}))} /> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Chưa có thông số kỹ thuật" />}
+    </> : <p>Sản phẩm không còn trong danh mục. Thông tin đã đặt vẫn được giữ trong đơn hàng.</p>}
+  </div>;
 }

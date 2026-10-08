@@ -6,12 +6,14 @@ import { lienHeService } from '../services/lienHe.service.js';
 export async function createLienHe(req: AuthRequest, res: Response) {
   try {
     const { ho_ten, email, so_dien_thoai, tieu_de, noi_dung } = req.body;
-    if (!ho_ten || !email || !tieu_de || !noi_dung) {
-      return sendError(res, 400, 'Thiếu thông tin liên hệ bắt buộc');
-    }
+    if (typeof ho_ten !== 'string' || ho_ten.trim().length < 2 || ho_ten.trim().length > 100 ||
+      typeof email !== 'string' || email.length > 100 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) ||
+      typeof tieu_de !== 'string' || tieu_de.trim().length < 2 || tieu_de.trim().length > 200 ||
+      typeof noi_dung !== 'string' || noi_dung.trim().length < 10 || noi_dung.trim().length > 5000 ||
+      (so_dien_thoai != null && (typeof so_dien_thoai !== 'string' || so_dien_thoai.trim().length > 15))) return sendError(res, 400, 'Thông tin liên hệ không hợp lệ. Vui lòng kiểm tra họ tên, email, tiêu đề và nội dung.');
 
     const maTaiKhoan = req.user?.ma_tai_khoan ?? null;
-    const result = await lienHeService.create([maTaiKhoan, ho_ten, email, so_dien_thoai || null, tieu_de, noi_dung]);
+    const result = await lienHeService.create([maTaiKhoan, ho_ten.trim(), email.trim(), so_dien_thoai?.trim() || null, tieu_de.trim(), noi_dung.trim()]);
 
     return sendSuccess(res, 'Gửi liên hệ thành công', { ma_lien_he: (result as any).insertId });
   } catch (error) {
@@ -63,7 +65,6 @@ export async function updateLienHe(req: Request, res: Response) {
     const normalizedReply = phan_hoi === undefined ? undefined : phan_hoi?.trim() || null;
     if (normalizedReply !== undefined) {
       await lienHeService.reply(Number(id), normalizedReply);
-      await lienHeService.updateStatus([Number(id), normalizedReply ? 'DaPhanHoi' : 'ChoPhanHoi']);
     } else if (trang_thai !== undefined) await lienHeService.updateStatus([Number(id), trang_thai]);
     return sendSuccess(res, 'Cập nhật liên hệ thành công', { ma_lien_he: Number(id), trang_thai: normalizedReply !== undefined ? (normalizedReply ? 'DaPhanHoi' : 'ChoPhanHoi') : trang_thai, ...(normalizedReply !== undefined ? { phan_hoi: normalizedReply } : {}) });
   } catch (error) {

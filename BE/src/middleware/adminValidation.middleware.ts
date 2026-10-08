@@ -3,6 +3,8 @@ import { NextFunction, Request, Response } from 'express';
 // Returns field names shared with the admin forms. Existing clients can still use message.
 export function adminValidation(req: Request, res: Response, next: NextFunction) {
   if (!['POST', 'PUT'].includes(req.method)) return next();
+  // Account creation validates its own fields and reads the employee name from the database.
+  if (req.method === 'POST' && /^\/nhan-vien\/[^/]+\/account\/?$/.test(req.path)) return next();
   const resource = req.path.split('/')[1];
   const required: Record<string, string[]> = {
     'san-pham': ['ma_san_pham_code', 'ten_san_pham', 'ma_danh_muc', 'ma_thuong_hieu', 'gia_ban'],

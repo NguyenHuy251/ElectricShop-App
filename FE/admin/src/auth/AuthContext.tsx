@@ -33,6 +33,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     window.addEventListener('admin:unauthorized', logout); window.addEventListener('storage', storage);
     return () => { generation.current++; window.removeEventListener('admin:unauthorized', logout); window.removeEventListener('storage', storage); };
   }, [logout, restore]);
+  useEffect(() => {
+    const refreshPermissions = async () => {
+      if (!localStorage.getItem('admin_token') || document.visibilityState === 'hidden') return;
+      const current = generation.current;
+      try {
+        const { data } = await authApi.me();
+        if (current !== generation.current) return;
+        if (!data.data || !allowed(data.data)) { logout(); return; }
+        setUser(data.data);
+      } catch { /* API authorization remains authoritative if this refresh fails. */ }
+    };
+    window.addEventListener('focus', refreshPermissions);
+    window.addEventListener('admin:permissions-changed', refreshPermissions);
+    const timer = window.setInterval(refreshPermissions, 30_000);
+    return () => { window.clearInterval(timer); window.removeEventListener('focus', refreshPermissions); window.removeEventListener('admin:permissions-changed', refreshPermissions); };
+  }, [logout]);
   const login = async (username: string, password: string) => {
     const { data } = await authApi.login({ ten_dang_nhap: username, mat_khau: password });
     if (!data.data?.user || !allowed(data.data.user)) { logout(); throw new Error('Tài khoản không có quyền truy cập quản trị.'); }

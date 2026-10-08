@@ -1,26 +1,29 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import api from '@/services/api';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { productService } from '../../services/product.service';
+import { categoryService, type Category } from '../../services/category.service';
 import type { Product } from '../../types';
 import { EmptyState, LoadingState, ProductCard, ScreenHeading } from '@/components/shop-ui';
 import { shop } from '@/constants/shop-theme';
 import { getApiMessage } from '@/utils/format';
 
 export default function ProductsScreen() {
-  const { category } = useLocalSearchParams<{ category?: string }>();
+  const { category, categoryId } = useLocalSearchParams<{ category?: string; categoryId?: string }>();
   const router = useRouter();
-  const selectedCategory = category || 'Tất cả';
-  const setSelectedCategory = (value: string) => router.setParams({ category: value });
+  const setSelectedCategory = (value: number) => router.setParams({ categoryId: value ? String(value) : undefined, category: undefined });
   const [products, setProducts] = useState<Product[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
-  const [categoryList,setCategoryList]=useState<{ma_danh_muc:number;ten_danh_muc:string}[]>([]);
+  const [categoryList,setCategoryList]=useState<Category[]>([]);
+  const [filtersReady,setFiltersReady]=useState(false);
+  const [filterError,setFilterError]=useState('');
+  const selectedCategory = categoryList.find(c => categoryId ? String(c.ma_danh_muc) === categoryId : c.ten_danh_muc === category)?.ma_danh_muc || 0;
   const [brands,setBrands]=useState<{ma_thuong_hieu:number;ten_thuong_hieu:string}[]>([]);
   const [brand,setBrand]=useState<number>();
   const [min,setMin]=useState(''), [max,setMax]=useState('');
@@ -29,13 +32,22 @@ export default function ProductsScreen() {
   const [page,setPage]=useState(0), [totalPages,setTotalPages]=useState(0), [total,setTotal]=useState(0);
   const [more,setMore]=useState(false);
   const generation=useRef(0),busy=useRef(false);
-  useEffect(()=>{
+  const loadFilters = useCallback(()=>{
     let active=true;
-    void Promise.all([api.get('/danh-muc'),api.get('/thuong-hieu')]).then(([c,b])=>{if(active){setCategoryList(c.data.data || []);setBrands(b.data.data || []);}}).catch(err=>{if(active)setError(getApiMessage(err,'Chưa tải được bộ lọc.'));});
+    setFiltersReady(false); setFilterError(''); setLoading(true);
+    void Promise.all([categoryService.getCategories(),api.get('/thuong-hieu')]).then(([c,b])=>{if(active){setCategoryList(c);setBrands(b.data.data || []);setFiltersReady(true);}}).catch(err=>{if(active){setFilterError(getApiMessage(err,'Chưa tải được bộ lọc.'));setLoading(false);}});
     return ()=>{active=false;};
   },[]);
+  useFocusEffect(loadFilters);
+  useEffect(() => {
+    if (filtersReady && (categoryId || category)) {
+      const resolvedId = selectedCategory ? String(selectedCategory) : undefined;
+      if (category !== undefined || categoryId !== resolvedId) router.setParams({ categoryId: resolvedId, category: undefined });
+    }
+  }, [filtersReady, categoryId, category, selectedCategory, router]);
 
   const loadProducts = useCallback(async (nextSearch = search, showSpinner = false, nextPage = 1) => {
+    if (!filtersReady) return;
     if(nextPage>1 && busy.current)return;
     const request=nextPage===1 ? ++generation.current : generation.current;
     busy.current=true;
@@ -44,8 +56,7 @@ export default function ProductsScreen() {
     setError('');
     try {
       if((min && !/^\d+$/.test(min)) || (max && !/^\d+$/.test(max)) || (min && max && Number(min)>Number(max))) {setError('Nhập khoảng giá hợp lệ.');return;}
-      const categoryId=categoryList.find(c=>c.ten_danh_muc===selectedCategory)?.ma_danh_muc;
-      const result = await productService.getProducts({ search: nextSearch, limit: 20, page:nextPage, sort, ma_danh_muc:categoryId, ma_thuong_hieu:brand, min_price:min || undefined, max_price:max || undefined });
+      const result = await productService.getProducts({ search: nextSearch, limit: 20, page:nextPage, sort, ma_danh_muc:selectedCategory || undefined, ma_thuong_hieu:brand, min_price:min || undefined, max_price:max || undefined });
       if(request!==generation.current)return;
       setProducts(current=>nextPage===1 ? result.data || [] : [...current,...(result.data || [])]);
       setPage(nextPage);setTotalPages(result.pagination?.totalPages || 0);setTotal(result.pagination?.total || 0);
@@ -54,15 +65,15 @@ export default function ProductsScreen() {
     } finally {
       if(request===generation.current){setLoading(false);setRefreshing(false);setMore(false);busy.current=false;}
     }
-  }, [search,sort,brand,min,max,categoryList,selectedCategory]);
+  }, [search,sort,brand,min,max,filtersReady,selectedCategory]);
 
   useEffect(() => {
     const timer = setTimeout(() => loadProducts(search, true), 350);
     return () => {clearTimeout(timer);generation.current++;busy.current=false;};
   }, [loadProducts, search]);
 
-  const categories = ['Tất cả',...categoryList.map(c=>c.ten_danh_muc)];
-  const activeFilterCount = Number(selectedCategory !== 'Tất cả') + Number(Boolean(brand)) + Number(Boolean(min || max)) + Number(sort !== 'newest');
+  const categories = [{ma_danh_muc:0,ten_danh_muc:'Tất cả'},...categoryList];
+  const activeFilterCount = Number(Boolean(selectedCategory)) + Number(Boolean(brand)) + Number(Boolean(min || max)) + Number(sort !== 'newest');
 
   const visibleProducts = products;
 
@@ -105,21 +116,30 @@ export default function ProductsScreen() {
           horizontal
           style={{ flexGrow: 0, flexShrink: 0 }}
           data={categories}
-          keyExtractor={(item) => item}
+          keyExtractor={(item) => String(item.ma_danh_muc)}
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.categories}
           renderItem={({ item }) => (
-            <Pressable onPress={() => setSelectedCategory(item)} accessibilityRole="button" accessibilityState={{ selected: selectedCategory === item }} style={[styles.chip, selectedCategory === item && styles.chipActive]}>
-              <Text style={[styles.chipText, selectedCategory === item && styles.chipTextActive]}>{item}</Text>
+            <Pressable onPress={() => setSelectedCategory(item.ma_danh_muc)} accessibilityRole="button" accessibilityState={{ selected: selectedCategory === item.ma_danh_muc }} style={[styles.chip, selectedCategory === item.ma_danh_muc && styles.chipActive]}>
+              <Text style={[styles.chipText, selectedCategory === item.ma_danh_muc && styles.chipTextActive]}>{item.ten_danh_muc}</Text>
             </Pressable>
           )}
         />
 
         <ScrollView horizontal style={{flexGrow:0,flexShrink:0}} contentContainerStyle={{gap:8,paddingBottom:8}}>{[{ma_thuong_hieu:0,ten_thuong_hieu:'Mọi thương hiệu'},...brands].map(b=><Pressable key={b.ma_thuong_hieu} onPress={()=>setBrand(b.ma_thuong_hieu || undefined)} style={[styles.chip,(brand || 0)===b.ma_thuong_hieu && styles.chipActive]}><Text style={[styles.chipText,(brand || 0)===b.ma_thuong_hieu && styles.chipTextActive]}>{b.ten_thuong_hieu}</Text></Pressable>)}</ScrollView>
-        <View style={styles.row}><TextInput accessibilityLabel="Giá từ" placeholder="Giá từ (đ)" keyboardType="numeric" value={min} onChangeText={setMin} style={[styles.searchBox,{flex:1,padding:10,height:40}]}/><TextInput accessibilityLabel="Giá đến" placeholder="Giá đến (đ)" keyboardType="numeric" value={max} onChangeText={setMax} style={[styles.searchBox,{flex:1,padding:10,height:40}]}/></View>
+        <View style={styles.priceRow}>
+          <View style={styles.priceField}>
+            <Text style={styles.priceLabel}>Giá từ (đ)</Text>
+            <TextInput accessibilityLabel="Giá từ" placeholder="Ví dụ: 100000" placeholderTextColor="#84938B" keyboardType="number-pad" value={min} onChangeText={setMin} selectionColor={shop.primary} style={styles.priceInput} />
+          </View>
+          <View style={styles.priceField}>
+            <Text style={styles.priceLabel}>Giá đến (đ)</Text>
+            <TextInput accessibilityLabel="Giá đến" placeholder="Ví dụ: 5000000" placeholderTextColor="#84938B" keyboardType="number-pad" value={max} onChangeText={setMax} selectionColor={shop.primary} style={styles.priceInput} />
+          </View>
+        </View>
         <ScrollView horizontal style={{flexGrow:0,flexShrink:0}} contentContainerStyle={styles.categories}>{[['newest','Mới nhất'],['price_asc','Giá tăng'],['price_desc','Giá giảm'],['bestseller','Bán chạy']].map(([value,label])=><Pressable key={value} onPress={()=>setSort(value)} style={[styles.chip,sort===value && styles.chipActive]}><Text style={[styles.chipText,sort===value && styles.chipTextActive]}>{label}</Text></Pressable>)}</ScrollView>
         </View> : null}
-        {loading ? (
+        {filterError ? <EmptyState icon="wifi-off" title="Chưa tải được danh mục" message={filterError} action="Thử lại" onAction={() => { loadFilters(); }} /> : loading ? (
           <LoadingState message="Đang tải sản phẩm..." />
         ) : error && !products.length ? (
           <EmptyState icon="wifi-off" title="Kết nối bị gián đoạn" message={error} action="Thử lại" onAction={() => loadProducts(search, true)} />
@@ -136,7 +156,7 @@ export default function ProductsScreen() {
             contentContainerStyle={visibleProducts.length ? styles.list : styles.emptyList}
             ListHeaderComponent={visibleProducts.length ? <Text style={styles.resultCount}>{total} sản phẩm dành cho bạn</Text> : null}
             showsVerticalScrollIndicator={false}
-            ListEmptyComponent={<EmptyState icon="search-off" title="Chưa tìm thấy sản phẩm" message="Thử từ khóa khác hoặc xem tất cả danh mục." action="Xem tất cả" onAction={() => { setSearch(''); setSelectedCategory('Tất cả'); }} />}
+            ListEmptyComponent={<EmptyState icon="search-off" title="Chưa tìm thấy sản phẩm" message="Thử từ khóa khác hoặc xem tất cả danh mục." action="Xem tất cả" onAction={() => { setSearch(''); setSelectedCategory(0); }} />}
             renderItem={({ item }) => <View style={styles.productCell}><ProductCard product={item} /></View>}
           />
         )}
@@ -155,6 +175,10 @@ const styles = StyleSheet.create({
   container: { flex: 1, paddingHorizontal: 20, paddingTop: 12, width: '100%', maxWidth: 760, alignSelf: 'center' },
   searchBox: { height: 54, flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#fff', borderRadius: 18, borderWidth: 1, borderColor: '#E3E9E1', paddingHorizontal: 12 },
   search: { flex: 1, color: '#183C35', fontSize: 14 },
+  priceRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+  priceField: { flex: 1, minWidth: 0, gap: 6 },
+  priceLabel: { color: '#52675D', fontSize: 12, fontWeight: '600' },
+  priceInput: { minHeight: 48, color: '#183C35', fontSize: 16, backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#E3E9E1', paddingHorizontal: 12, paddingVertical: 10, textAlignVertical: 'center' },
   categories: { gap: 8, paddingVertical: 14 },
   chip: { height: 36, justifyContent: 'center', paddingHorizontal: 14, borderRadius: 18, backgroundColor: '#fff', borderWidth: 1, borderColor: '#E3E9E1' },
   chipActive: { backgroundColor: '#183C35', borderColor: '#183C35' },

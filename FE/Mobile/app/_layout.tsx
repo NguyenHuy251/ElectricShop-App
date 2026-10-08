@@ -6,6 +6,9 @@ import { useEffect } from 'react';
 import 'react-native-reanimated';
 
 import { shop } from '@/constants/shop-theme';
+import { authService } from '@/services/auth.service';
+import { isStoredMobileStaff } from '@/utils/mobile-access';
+import { ContactReplyNotice } from '@/components/contact-reply-notice';
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -18,8 +21,13 @@ export default function RootLayout() {
 
   useEffect(() => {
     let active = true;
-    AsyncStorage.getItem('token').then((token) => {
+    Promise.all([AsyncStorage.getItem('token'), AsyncStorage.getItem('user')]).then(async ([token, user]) => {
       if (!active) return;
+      if (token && isStoredMobileStaff(user)) {
+        await authService.logout();
+        if (active) router.replace('/(auth)/login');
+        return;
+      }
       const inAuthGroup = routeGroup === '(auth)';
       if (!token && !inAuthGroup) {
         router.replace('/(auth)/login');
@@ -43,9 +51,10 @@ export default function RootLayout() {
         <Stack.Screen name="checkout" options={{ title: 'Thanh toán' }} />
         <Stack.Screen name="checkout-success" options={{ title: 'Đơn hàng của bạn', headerBackVisible: false }} />
         <Stack.Screen name="account-tools" options={{ title: 'Đổi mật khẩu' }} />
-        <Stack.Screen name="vouchers" options={{ title: 'Voucher của tôi' }} />
+        <Stack.Screen name="vouchers" options={{ title: 'Voucher của tôi', headerBackTitle: 'Quay lại' }} />
         <Stack.Screen name="orders" options={{ title: 'Đơn hàng của tôi' }} />
       </Stack>
+      {routeGroup !== '(auth)' ? <ContactReplyNotice /> : null}
       <StatusBar style="dark" />
     </ThemeProvider>
   );

@@ -2,6 +2,7 @@ import type { Pool, PoolConnection } from 'mysql2/promise';
 import { CheckoutError, type CheckoutItem } from '../utils/checkout.js';
 
 export const cartItemsSql = `SELECT cth.ma_san_pham, cth.ma_bien_the, cth.so_luong, sp.ten_san_pham, sp.hinh_anh,
+  (cth.ma_bien_the IS NULL AND EXISTS (SELECT 1 FROM san_pham_bien_the v WHERE v.ma_san_pham=sp.ma_san_pham)) AS needs_variant,
   bt.ten_bien_the, IF(cth.ma_bien_the IS NULL, sp.gia_ban, bt.gia_ban) AS gia_ban,
   IF(cth.ma_bien_the IS NULL, sp.so_luong, COALESCE(bt.so_luong, 0)) AS ton_kho,
   IF(sp.trang_thai <> 'DangBan', sp.trang_thai, IF(cth.ma_bien_the IS NULL, sp.trang_thai, COALESCE(bt.trang_thai, 'NgungBan'))) AS trang_thai

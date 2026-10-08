@@ -1,4 +1,5 @@
 import { pool } from '../config/database.js';
+import { hasPermission } from '../services/permission.service.js';
 import { Request, Response } from 'express';
 import { AuthRequest } from '../middleware/auth.middleware.js';
 import { sendError, sendSuccess } from '../utils/response.js';
@@ -106,7 +107,7 @@ export async function deleteDanhGia(req: AuthRequest, res: Response) {
     if (!req.user) return sendError(res, 401, 'Bạn chưa đăng nhập');
 
     const { id } = req.params;
-    const isStaff = ['Admin', 'NhanVien'].includes(req.user.vai_tro);
+    const isStaff = hasPermission(req.user, 'reviews');
     const rows = await danhGiaService.getById(Number(id));
     if (!isStaff && !rows.some(review => review.ma_danh_gia === Number(id) && review.ma_tai_khoan === req.user?.ma_tai_khoan)) return sendError(res, 404, 'Không tìm thấy đánh giá của bạn');
     if (isStaff && !rows.some(review => review.ma_danh_gia === Number(id))) return sendError(res, 404, 'Không tìm thấy đánh giá của bạn');

@@ -23,8 +23,8 @@ export const lienHeService = {
   updateStatus: (params: unknown[]) => callProcedure(lienHeProcedures.updateStatus, params).then(firstResult),
   reply: async (id: number, phanHoi: string | null) => {
     const [result] = await pool.execute(
-      'UPDATE lien_he SET phan_hoi = ?, ngay_phan_hoi = CASE WHEN ? IS NULL THEN NULL ELSE NOW() END WHERE ma_lien_he = ?',
-      [phanHoi, phanHoi, id],
+      'UPDATE lien_he SET phan_hoi = ?, ngay_phan_hoi = CASE WHEN ? IS NULL THEN NULL ELSE NOW() END, trang_thai = ? WHERE ma_lien_he = ?',
+      [phanHoi, phanHoi, phanHoi ? 'DaPhanHoi' : 'ChoPhanHoi', id],
     );
     return result;
   },

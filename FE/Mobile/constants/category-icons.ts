@@ -1,0 +1,60 @@
+import type { ComponentProps } from 'react';
+import type MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+
+type CategoryIcon = ComponentProps<typeof MaterialCommunityIcons>['name'];
+
+const categoryIcons: Record<string, CategoryIcon> = {
+  'tủ lạnh': 'fridge',
+  'tủ đông': 'fridge-industrial',
+  'tủ mát': 'fridge-outline',
+  'máy giặt': 'washing-machine',
+  'máy sấy quần áo': 'tumble-dryer',
+  'máy rửa bát': 'dishwasher',
+  'lò vi sóng': 'microwave',
+  'lò vi sóng có nướng': 'microwave',
+  'lò nướng': 'toaster-oven',
+  'bếp điện': 'stove',
+  'bếp gas': 'stove',
+  'bếp hồng ngoại': 'stove',
+  'máy hút mùi': 'air-filter',
+  'nồi cơm điện': 'rice',
+  'nồi áp suất điện': 'pot-steam',
+  'nồi chiên không dầu': 'pot',
+  'nồi lẩu điện': 'pot-steam-outline',
+  'nồi nấu chậm': 'pot-outline',
+  'ấm siêu tốc': 'kettle',
+  'bình thủy điện': 'kettle-steam',
+  'máy pha cà phê': 'coffee-maker',
+  'máy xay sinh tố': 'blender',
+  'máy làm sữa hạt': 'blender-outline',
+  'máy xay thịt': 'food-steak',
+  'máy ép trái cây': 'fruit-citrus',
+  'máy đánh trứng': 'pot-mix',
+  'máy làm bánh mì': 'bread-slice',
+  'máy nướng bánh mì': 'toaster',
+  'máy hút chân không': 'food-takeout-box-outline',
+  'máy hút bụi': 'vacuum',
+  'robot hút bụi': 'robot-vacuum',
+  'bàn ủi': 'iron',
+  'bàn ủi hơi nước': 'iron-outline',
+  'điều hòa': 'air-conditioner',
+  'quạt điện': 'fan',
+  'quạt trần': 'ceiling-fan',
+  'quạt treo tường': 'fan',
+  'quạt điều hòa': 'air-conditioner',
+  'quạt sưởi': 'radiator',
+  'máy sưởi dầu': 'radiator',
+  'máy lọc không khí': 'air-purifier',
+  'máy hút ẩm': 'water-minus-outline',
+  'máy tạo ẩm': 'air-humidifier',
+  'máy lọc nước': 'water-check-outline',
+  'bình nước nóng': 'water-boiler',
+  'máy nước nóng năng lượng mặt trời': 'solar-power',
+  'máy sấy tóc': 'hair-dryer',
+  'máy cạo râu': 'razor-single-edge',
+  'tivi': 'television',
+};
+
+export function getCategoryIcon(name: string): CategoryIcon {
+  return categoryIcons[name.normalize('NFC').trim().toLocaleLowerCase('vi-VN')] || 'devices';
+}
