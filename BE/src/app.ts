@@ -3,6 +3,10 @@ import dotenv from 'dotenv';
 import express from 'express';
 import helmet from 'helmet';
 import morgan from 'morgan';
+import { mkdirSync, createWriteStream } from 'node:fs';
+import uploadRoutes, { uploadDirectory } from './routes/upload.routes.js';
+import shopRoutes from './routes/shop.routes.js';
+import { rateLimit } from './middleware/rateLimit.middleware.js';
 
 import { testConnection } from './config/database.js';
 import authRoutes from './routes/auth.routes.js';
@@ -24,6 +28,7 @@ dotenv.config();
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
+const contactLimit = rateLimit(10, 15 * 60_000);
 
 const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:5173,http://localhost:5174,http://localhost:8081').split(',').map(value => value.trim()).filter(Boolean);
 if (process.env.NODE_ENV === 'production' && !process.env.CORS_ORIGINS) throw new Error('CORS_ORIGINS must be configured in production');
@@ -34,11 +39,19 @@ app.use(cors({
   },
   credentials: true,
 }));
-app.use(helmet());
+app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 app.use(morgan('dev'));
+if (process.env.LOG_TO_FILE === 'true' || process.env.NODE_ENV === 'production') {
+  mkdirSync('logs', { recursive: true });
+  app.use(morgan('combined', { stream: createWriteStream('logs/access.log', { flags: 'a' }) }));
+}
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use('/api', adminValidation);
+app.use('/uploads', express.static(uploadDirectory, { dotfiles: 'deny', index: false }));
+app.use('/api/uploads', uploadRoutes);
+app.use('/api/shop', shopRoutes);
+app.use('/api/lien-he', (req, res, next) => req.method === 'POST' ? contactLimit(req, res, next) : next());
 
 app.get('/api/health', (_req, res) => {
   res.json({ success: true, message: 'API is running', data: { status: 'ok' } });

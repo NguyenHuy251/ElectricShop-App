@@ -12,6 +12,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState('');
   const generation = useRef(0);
   const logout = useCallback(() => {
+    const refresh=localStorage.getItem('admin_refresh_token');localStorage.removeItem('admin_refresh_token');if(refresh)void authApi.logout(refresh).catch(()=>undefined);
     generation.current++; localStorage.removeItem('admin_token'); localStorage.removeItem('admin_user'); setUser(null); setError(''); setLoading(false);
   }, []);
   const restore = useCallback(async () => {
@@ -35,7 +36,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = async (username: string, password: string) => {
     const { data } = await authApi.login({ ten_dang_nhap: username, mat_khau: password });
     if (!data.data?.user || !allowed(data.data.user)) { logout(); throw new Error('Tài khoản không có quyền truy cập quản trị.'); }
-    generation.current++; localStorage.setItem('admin_token', data.data.token); localStorage.removeItem('admin_user'); setUser(data.data.user); setError('');
+    generation.current++; localStorage.setItem('admin_token', data.data.token); if(data.data.refresh_token)localStorage.setItem('admin_refresh_token',data.data.refresh_token);localStorage.removeItem('admin_user'); setUser(data.data.user); setError('');
   };
   return <AuthContext.Provider value={{ user, loading, error, restore, login, logout }}>{children}</AuthContext.Provider>;
 }

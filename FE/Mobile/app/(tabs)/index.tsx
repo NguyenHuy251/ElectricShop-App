@@ -81,6 +81,7 @@ export default function HomeScreen() {
         </View>
 
         <View style={styles.promise}><MaterialIcons name="electric-bolt" size={18} color={shop.primary} /><Text style={styles.promiseText}>Tiện ích cho nhà · Cảm hứng cho cuộc sống</Text></View>
+        <Link href="/vouchers" asChild><Pressable accessibilityRole="button" accessibilityLabel="Voucher" style={styles.bottomBanner}><MaterialIcons name="local-offer" size={28} color={shop.primary} /><View style={{ flex: 1 }}><Text style={styles.bottomTitle}>Voucher</Text><Text style={styles.bottomText}>Xem mã giảm giá dành cho bạn</Text></View><MaterialIcons name="chevron-right" size={24} color={shop.primary} /></Pressable></Link>
         <SectionHeader title="Góc nhà của bạn" action="Xem tất cả" href="/products" />
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryRow}>
           {Array.from(new Set(products.map(p => p.ten_danh_muc).filter((name): name is string => Boolean(name)))).map((label, index) => ({ ...fallbackCategories[index % fallbackCategories.length], label })).map((category) => (

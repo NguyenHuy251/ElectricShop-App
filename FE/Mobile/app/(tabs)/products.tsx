@@ -1,7 +1,8 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { FlatList, Pressable, RefreshControl, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import api from '@/services/api';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { productService } from '../../services/product.service';
 import type { Product } from '../../types';
@@ -19,32 +20,51 @@ export default function ProductsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
+  const [categoryList,setCategoryList]=useState<{ma_danh_muc:number;ten_danh_muc:string}[]>([]);
+  const [brands,setBrands]=useState<{ma_thuong_hieu:number;ten_thuong_hieu:string}[]>([]);
+  const [brand,setBrand]=useState<number>();
+  const [min,setMin]=useState(''), [max,setMax]=useState('');
+  const [sort,setSort]=useState('newest');
+  const [filtersVisible, setFiltersVisible] = useState(false);
+  const [page,setPage]=useState(0), [totalPages,setTotalPages]=useState(0), [total,setTotal]=useState(0);
+  const [more,setMore]=useState(false);
+  const generation=useRef(0),busy=useRef(false);
+  useEffect(()=>{
+    let active=true;
+    void Promise.all([api.get('/danh-muc'),api.get('/thuong-hieu')]).then(([c,b])=>{if(active){setCategoryList(c.data.data || []);setBrands(b.data.data || []);}}).catch(err=>{if(active)setError(getApiMessage(err,'Chưa tải được bộ lọc.'));});
+    return ()=>{active=false;};
+  },[]);
 
-  const loadProducts = useCallback(async (nextSearch = search, showSpinner = false) => {
+  const loadProducts = useCallback(async (nextSearch = search, showSpinner = false, nextPage = 1) => {
+    if(nextPage>1 && busy.current)return;
+    const request=nextPage===1 ? ++generation.current : generation.current;
+    busy.current=true;
+    if(nextPage>1)setMore(true);
     if (showSpinner) setLoading(true);
     setError('');
     try {
-      const result = await productService.getProducts({ search: nextSearch, limit: 50 });
-      setProducts(result.data || []);
+      if((min && !/^\d+$/.test(min)) || (max && !/^\d+$/.test(max)) || (min && max && Number(min)>Number(max))) {setError('Nhập khoảng giá hợp lệ.');return;}
+      const categoryId=categoryList.find(c=>c.ten_danh_muc===selectedCategory)?.ma_danh_muc;
+      const result = await productService.getProducts({ search: nextSearch, limit: 20, page:nextPage, sort, ma_danh_muc:categoryId, ma_thuong_hieu:brand, min_price:min || undefined, max_price:max || undefined });
+      if(request!==generation.current)return;
+      setProducts(current=>nextPage===1 ? result.data || [] : [...current,...(result.data || [])]);
+      setPage(nextPage);setTotalPages(result.pagination?.totalPages || 0);setTotal(result.pagination?.total || 0);
     } catch (error) {
-      setError(getApiMessage(error, 'Không thể tải danh sách sản phẩm'));
+      if(request===generation.current)setError(getApiMessage(error, 'Không thể tải danh sách sản phẩm'));
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if(request===generation.current){setLoading(false);setRefreshing(false);setMore(false);busy.current=false;}
     }
-  }, [search]);
+  }, [search,sort,brand,min,max,categoryList,selectedCategory]);
 
   useEffect(() => {
     const timer = setTimeout(() => loadProducts(search, true), 350);
-    return () => clearTimeout(timer);
+    return () => {clearTimeout(timer);generation.current++;busy.current=false;};
   }, [loadProducts, search]);
 
-  const categories = useMemo(() => [
-    'Tất cả',
-    ...Array.from(new Set(products.map((item) => item.ten_danh_muc).filter((value): value is string => Boolean(value)))),
-  ], [products]);
+  const categories = ['Tất cả',...categoryList.map(c=>c.ten_danh_muc)];
+  const activeFilterCount = Number(selectedCategory !== 'Tất cả') + Number(Boolean(brand)) + Number(Boolean(min || max)) + Number(sort !== 'newest');
 
-  const visibleProducts = products.filter(item => selectedCategory === 'Tất cả' || item.ten_danh_muc === selectedCategory);
+  const visibleProducts = products;
 
   const refresh = () => {
     setRefreshing(true);
@@ -67,6 +87,20 @@ export default function ProductsScreen() {
           {search ? <Pressable onPress={() => setSearch('')}><MaterialIcons name="close" size={20} color="#6D7D76" /></Pressable> : null}
         </View>
 
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={filtersVisible ? 'Ẩn bộ lọc sản phẩm' : 'Hiện bộ lọc sản phẩm'}
+          accessibilityState={{ expanded: filtersVisible }}
+          onPress={() => setFiltersVisible(current => !current)}
+          style={styles.filterToggle}
+        >
+          <MaterialIcons name="filter-list" size={20} color={shop.primary} />
+          <Text style={styles.filterToggleText}>{filtersVisible ? 'Ẩn bộ lọc' : 'Hiện bộ lọc'}</Text>
+          {activeFilterCount > 0 ? <Text style={styles.filterCount}>{activeFilterCount} đang áp dụng</Text> : null}
+          <MaterialIcons name={filtersVisible ? 'expand-less' : 'expand-more'} size={22} color={shop.primary} />
+        </Pressable>
+
+        {filtersVisible ? <View>
         <FlatList
           horizontal
           style={{ flexGrow: 0, flexShrink: 0 }}
@@ -81,19 +115,26 @@ export default function ProductsScreen() {
           )}
         />
 
+        <ScrollView horizontal style={{flexGrow:0,flexShrink:0}} contentContainerStyle={{gap:8,paddingBottom:8}}>{[{ma_thuong_hieu:0,ten_thuong_hieu:'Mọi thương hiệu'},...brands].map(b=><Pressable key={b.ma_thuong_hieu} onPress={()=>setBrand(b.ma_thuong_hieu || undefined)} style={[styles.chip,(brand || 0)===b.ma_thuong_hieu && styles.chipActive]}><Text style={[styles.chipText,(brand || 0)===b.ma_thuong_hieu && styles.chipTextActive]}>{b.ten_thuong_hieu}</Text></Pressable>)}</ScrollView>
+        <View style={styles.row}><TextInput accessibilityLabel="Giá từ" placeholder="Giá từ (đ)" keyboardType="numeric" value={min} onChangeText={setMin} style={[styles.searchBox,{flex:1,padding:10,height:40}]}/><TextInput accessibilityLabel="Giá đến" placeholder="Giá đến (đ)" keyboardType="numeric" value={max} onChangeText={setMax} style={[styles.searchBox,{flex:1,padding:10,height:40}]}/></View>
+        <ScrollView horizontal style={{flexGrow:0,flexShrink:0}} contentContainerStyle={styles.categories}>{[['newest','Mới nhất'],['price_asc','Giá tăng'],['price_desc','Giá giảm'],['bestseller','Bán chạy']].map(([value,label])=><Pressable key={value} onPress={()=>setSort(value)} style={[styles.chip,sort===value && styles.chipActive]}><Text style={[styles.chipText,sort===value && styles.chipTextActive]}>{label}</Text></Pressable>)}</ScrollView>
+        </View> : null}
         {loading ? (
           <LoadingState message="Đang tải sản phẩm..." />
-        ) : error ? (
+        ) : error && !products.length ? (
           <EmptyState icon="wifi-off" title="Kết nối bị gián đoạn" message={error} action="Thử lại" onAction={() => loadProducts(search, true)} />
         ) : (
           <FlatList
             data={visibleProducts}
+            onEndReached={()=>{if(page<totalPages && !error)void loadProducts(search,false,page+1);}}
+            onEndReachedThreshold={0.3}
+            ListFooterComponent={error ? <EmptyState icon="wifi-off" title="Chưa tải được trang tiếp theo" message={error} action="Thử lại" onAction={()=>void loadProducts(search,false,page+1)}/> : more ? <LoadingState message="Đang tải thêm..."/> : null}
             keyExtractor={(item) => String(item.ma_san_pham)}
             numColumns={2}
             columnWrapperStyle={styles.row}
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
             contentContainerStyle={visibleProducts.length ? styles.list : styles.emptyList}
-            ListHeaderComponent={visibleProducts.length ? <Text style={styles.resultCount}>{visibleProducts.length} sản phẩm dành cho bạn</Text> : null}
+            ListHeaderComponent={visibleProducts.length ? <Text style={styles.resultCount}>{total} sản phẩm dành cho bạn</Text> : null}
             showsVerticalScrollIndicator={false}
             ListEmptyComponent={<EmptyState icon="search-off" title="Chưa tìm thấy sản phẩm" message="Thử từ khóa khác hoặc xem tất cả danh mục." action="Xem tất cả" onAction={() => { setSearch(''); setSelectedCategory('Tất cả'); }} />}
             renderItem={({ item }) => <View style={styles.productCell}><ProductCard product={item} /></View>}
@@ -105,6 +146,9 @@ export default function ProductsScreen() {
 }
 
 const styles = StyleSheet.create({
+  filterToggle: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 8, marginVertical: 6 },
+  filterToggleText: { color: shop.primary, fontSize: 13, fontWeight: '700', flex: 1 },
+  filterCount: { color: shop.muted, fontSize: 12 },
   resultCount: { color: shop.muted, fontSize: 12, marginBottom: 16 },
   productCell: { flex: 1, maxWidth: '49%', marginBottom: 14 },
   safe: { flex: 1, backgroundColor: '#F6F7F2' },

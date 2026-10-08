@@ -1,4 +1,14 @@
 import { callProcedure, firstResult, secondResult } from './procedure.service.js';
+import { pool } from '../config/database.js';
+
+async function withPaymentDetails(orders: unknown[]) {
+  const rows = orders as { ma_don_hang: number; [key: string]: unknown }[];
+  if (!rows.length) return orders;
+  const [payments] = await pool.query(`SELECT ma_don_hang,ma_voucher,ma_code,giam_gia,phi_giao_hang,
+    tong_tien+giam_gia-phi_giao_hang AS tam_tinh FROM don_hang WHERE ma_don_hang IN (?)`, [rows.map(row => row.ma_don_hang)]);
+  const byId = new Map((payments as typeof rows).map(row => [row.ma_don_hang,row]));
+  return rows.map(row => ({ ...row, ...byId.get(row.ma_don_hang) }));
+}
 
 export const donHangProcedures = {
   create: 'sp_don_hang_create',
@@ -15,12 +25,12 @@ export async function createDonHang(params: unknown[]) {
 
 export async function listDonHang(accountId: number, isCustomer: boolean) {
   const resultSets = await callProcedure(donHangProcedures.list, [accountId, isCustomer]);
-  return { orders: firstResult(resultSets), items: secondResult(resultSets) };
+  return { orders: await withPaymentDetails(firstResult(resultSets)), items: secondResult(resultSets) };
 }
 
 export async function getDonHangById(id: number) {
   const resultSets = await callProcedure(donHangProcedures.getById, [id]);
-  return { order: firstResult(resultSets), items: secondResult(resultSets) };
+  return { order: await withPaymentDetails(firstResult(resultSets)), items: secondResult(resultSets) };
 }
 
 export const donHangService = {

@@ -3,6 +3,8 @@ import { useAuth } from '../auth/AuthContext';
 export const navigation = [
   ['/dashboard', 'Tổng quan'], ['/products', 'Sản phẩm'], ['/categories', 'Danh mục'], ['/category-specifications', 'Danh mục thông số'], ['/brands', 'Thương hiệu'],
   ['/orders', 'Đơn hàng'], ['/customers', 'Khách hàng / Tài khoản'], ['/employees', 'Nhân viên'], ['/reviews', 'Đánh giá'], ['/contacts', 'Liên hệ'],
+  ['/inventory','Nhập kho'], ['/vouchers','Mã giảm giá'], ['/account','Tài khoản của tôi'],
+  ['/reports','Báo cáo'],
 ];
 export default function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const { user } = useAuth();

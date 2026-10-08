@@ -1,9 +1,12 @@
+import { recordVoucherUsage } from '../services/voucher.service.js';
 import { createHash } from 'node:crypto';
 import { Response } from 'express';
 import { pool } from '../config/database.js';
 import { AuthRequest } from '../middleware/auth.middleware.js';
 import { sendError, sendSuccess } from '../utils/response.js';
 import { CheckoutError, CheckoutItem, checkoutSelection, summarizeCart, validateCheckout } from '../utils/checkout.js';
+import { cartItemsSql, resolveItem } from '../services/commerce.service.js';
+import { priceCheckout, voucherCode } from '../services/pricing.service.js';
 
 function fail(res: Response, error: unknown) {
   if (error instanceof CheckoutError) return res.status(error.status).json({ success: false, message: error.message, fieldErrors: error.fieldErrors || {} });
@@ -16,23 +19,19 @@ export async function previewCheckout(req: AuthRequest, res: Response) {
   try {
     const selection = checkoutSelection(req.query || {}, true);
     if (selection.source === 'buy_now') {
-      const [rows] = await pool.query('SELECT ma_san_pham, ten_san_pham, gia_ban, hinh_anh, so_luong AS ton_kho, trang_thai FROM san_pham WHERE ma_san_pham = ?', [selection.ma_san_pham]);
-      const product = (rows as CheckoutItem[])[0];
-      if (!product) throw new CheckoutError(404, 'Sản phẩm không còn tồn tại.');
-      return sendSuccess(res, 'Thông tin thanh toán ngay', { ...summarizeCart([{ ...product, so_luong: selection.so_luong! }]), ...selection });
+      const product = await resolveItem(pool, selection.ma_san_pham!, selection.ma_bien_the);
+      return sendSuccess(res, 'Thông tin thanh toán ngay', { ...await priceCheckout(pool, summarizeCart([{ ...product, so_luong: selection.so_luong! }]),voucherCode(req.query?.ma_code),false,req.user.ma_tai_khoan), ...selection });
     }
     const [rows] = await pool.query(
-      `SELECT cth.ma_san_pham, cth.so_luong, sp.ten_san_pham, sp.gia_ban, sp.hinh_anh, sp.so_luong AS ton_kho, sp.trang_thai
-       FROM gio_hang gh JOIN chi_tiet_gio_hang cth ON cth.ma_gio_hang = gh.ma_gio_hang
-       JOIN san_pham sp ON sp.ma_san_pham = cth.ma_san_pham WHERE gh.ma_tai_khoan = ? ORDER BY sp.ma_san_pham`, [req.user.ma_tai_khoan]);
-    return sendSuccess(res, 'Thông tin thanh toán', summarizeCart(rows as CheckoutItem[]));
+      cartItemsSql, [req.user.ma_tai_khoan]);
+    return sendSuccess(res, 'Thông tin thanh toán', await priceCheckout(pool,summarizeCart(rows as CheckoutItem[]),voucherCode(req.query?.ma_code),false,req.user.ma_tai_khoan));
   } catch (error) { return fail(res, error); }
 }
 
 export async function createDonHang(req: AuthRequest, res: Response) {
   if (!req.user) return sendError(res, 401, 'Bạn chưa đăng nhập');
   try {
-    const input = validateCheckout(req.body || {});
+    const input = { ...validateCheckout(req.body || {}), ma_code: voucherCode(req.body?.ma_code) };
     const requestHash = createHash('sha256').update(JSON.stringify(input)).digest('hex');
     const connection = await pool.getConnection();
     try {
@@ -51,38 +50,38 @@ export async function createDonHang(req: AuthRequest, res: Response) {
         return sendSuccess(res, 'Đơn hàng đã được ghi nhận', previousResult);
       }
       let cartId: number | undefined;
-      let lines: { ma_san_pham: number; so_luong: number }[];
+      let lines: { ma_san_pham: number; ma_bien_the?: number | null; so_luong: number }[];
       if (input.source === 'buy_now') {
-        lines = [{ ma_san_pham: input.ma_san_pham!, so_luong: input.so_luong! }];
+        lines = [{ ma_san_pham: input.ma_san_pham!, ma_bien_the: input.ma_bien_the, so_luong: input.so_luong! }];
       } else {
         // Cart writers lock this parent too; edits cannot interleave with checkout.
         const [carts] = await connection.query('SELECT ma_gio_hang FROM gio_hang WHERE ma_tai_khoan = ? FOR UPDATE', [req.user.ma_tai_khoan]);
         cartId = (carts as { ma_gio_hang: number }[])[0]?.ma_gio_hang;
         if (!cartId) throw new CheckoutError(409, 'Giỏ hàng trống. Vui lòng chọn sản phẩm trước.');
-        const [cartRows] = await connection.query('SELECT ma_san_pham, so_luong FROM chi_tiet_gio_hang WHERE ma_gio_hang = ? ORDER BY ma_san_pham FOR UPDATE', [cartId]);
+        const [cartRows] = await connection.query('SELECT ma_san_pham, ma_bien_the, so_luong FROM chi_tiet_gio_hang WHERE ma_gio_hang = ? ORDER BY ma_san_pham, ma_bien_the FOR UPDATE', [cartId]);
         lines = cartRows as typeof lines;
       }
       if (!lines.length) throw new CheckoutError(409, 'Giỏ hàng trống. Vui lòng kiểm tra các đơn hàng đã đặt.');
       const items: CheckoutItem[] = [];
       // Lock in product-id order across carts to prevent overselling.
       for (const line of lines) {
-        const [products] = await connection.query('SELECT ma_san_pham, ten_san_pham, gia_ban, so_luong AS ton_kho, trang_thai FROM san_pham WHERE ma_san_pham = ? FOR UPDATE', [line.ma_san_pham]);
-        const product = (products as CheckoutItem[])[0];
-        if (!product) throw new CheckoutError(409, 'Một sản phẩm không còn tồn tại. Vui lòng kiểm tra lại giỏ hàng.');
+        const product = await resolveItem(connection, line.ma_san_pham, line.ma_bien_the, true);
         items.push({ ...product, so_luong: line.so_luong });
       }
-      const quote = summarizeCart(items);
+      const quote = await priceCheckout(connection, summarizeCart(items),input.ma_code,true,req.user.ma_tai_khoan);
       if (!quote.can_checkout) throw new CheckoutError(409, quote.issues.join(' '));
       if (quote.snapshot !== input.snapshot) throw new CheckoutError(409, 'Giá hoặc giỏ hàng đã thay đổi. Vui lòng cập nhật và kiểm tra lại trước khi đặt hàng.');
       const [result] = await connection.execute(
-        `INSERT INTO don_hang (ma_tai_khoan, ho_ten_nguoi_nhan, so_dien_thoai, dia_chi_giao_hang, tong_tien, phuong_thuc_thanh_toan, trang_thai, ghi_chu, ngay_dat)
-         VALUES (?, ?, ?, ?, ?, ?, 'ChoXacNhan', ?, NOW())`,
-        [req.user.ma_tai_khoan, input.ho_ten_nguoi_nhan, input.so_dien_thoai, input.dia_chi_giao_hang, quote.tong_tien, input.phuong_thuc_thanh_toan, input.ghi_chu || null]);
+        `INSERT INTO don_hang (ma_tai_khoan, ho_ten_nguoi_nhan, so_dien_thoai, dia_chi_giao_hang, tong_tien, phuong_thuc_thanh_toan, trang_thai, ghi_chu, ngay_dat, ma_voucher, ma_code, giam_gia, phi_giao_hang)
+         VALUES (?, ?, ?, ?, ?, ?, 'ChoXacNhan', ?, NOW(), ?, ?, ?, ?)`,
+        [req.user.ma_tai_khoan, input.ho_ten_nguoi_nhan, input.so_dien_thoai, input.dia_chi_giao_hang, quote.tong_tien, input.phuong_thuc_thanh_toan, input.ghi_chu || null,quote.ma_voucher,quote.ma_code || null,quote.giam_gia,quote.phi_giao_hang]);
       const orderId = (result as { insertId: number }).insertId;
+      await recordVoucherUsage(connection,orderId,req.user.ma_tai_khoan,quote);
       for (const item of items) {
         // thanh_tien is a generated column in MySQL.
-        await connection.execute('INSERT INTO chi_tiet_don_hang (ma_don_hang, ma_san_pham, ten_san_pham, so_luong, don_gia) VALUES (?, ?, ?, ?, ?)', [orderId, item.ma_san_pham, item.ten_san_pham, item.so_luong, item.gia_ban]);
-        await connection.execute('UPDATE san_pham SET so_luong = so_luong - ? WHERE ma_san_pham = ?', [item.so_luong, item.ma_san_pham]);
+        await connection.execute('INSERT INTO chi_tiet_don_hang (ma_don_hang, ma_san_pham, ten_san_pham, so_luong, don_gia, ma_bien_the, ten_bien_the) VALUES (?, ?, ?, ?, ?, ?, ?)', [orderId, item.ma_san_pham, item.ten_san_pham, item.so_luong, item.gia_ban, item.ma_bien_the || null, item.ten_bien_the || null]);
+        if (item.ma_bien_the) await connection.execute('UPDATE san_pham_bien_the SET so_luong = so_luong - ? WHERE ma_bien_the = ?', [item.so_luong, item.ma_bien_the]);
+        else await connection.execute('UPDATE san_pham SET so_luong = so_luong - ? WHERE ma_san_pham = ?', [item.so_luong, item.ma_san_pham]);
       }
       const response = { ma_don_hang: orderId, tong_tien: quote.tong_tien, phuong_thuc_thanh_toan: input.phuong_thuc_thanh_toan, trang_thai: 'ChoXacNhan' };
       await connection.execute('UPDATE checkout_requests SET response_json = ? WHERE ma_tai_khoan = ? AND request_id = ?', [JSON.stringify(response), req.user.ma_tai_khoan, input.request_id]);

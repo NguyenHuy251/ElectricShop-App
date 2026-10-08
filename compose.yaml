@@ -1,0 +1,40 @@
+name: electricshop-local
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DOCKER_DB_PASSWORD:?Set DOCKER_DB_PASSWORD}
+    ports:
+      - "127.0.0.1:3307:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./BE/database/database.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./BE/database/upgrade_product_management_migration_fixed.sql:/docker-entrypoint-initdb.d/02-specifications.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=$$MYSQL_ROOT_PASSWORD mysql -uroot -e 'SELECT 1' >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+  backend:
+    build: ./BE
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USER: root
+      DB_PASSWORD: ${DOCKER_DB_PASSWORD:?Set DOCKER_DB_PASSWORD}
+      DB_NAME: dien_gia_dung
+      JWT_SECRET: ${DOCKER_JWT_SECRET:?Set DOCKER_JWT_SECRET with 32 characters or more}
+      CORS_ORIGINS: http://localhost:5173,http://127.0.0.1:5173,http://localhost:8081,http://127.0.0.1:8081
+      LOG_TO_FILE: "true"
+    ports:
+      - "3001:3000"
+    volumes:
+      - image-data:/app/uploads
+      - log-data:/app/logs
+volumes:
+  mysql-data:
+  image-data:
+  log-data:

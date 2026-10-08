@@ -7,5 +7,6 @@ export function notFoundHandler(req: Request, res: Response) {
 
 export function errorHandler(err: Error, req: Request, res: Response, _next: NextFunction) {
   console.error('Unhandled error:', err);
+  if ((err as Error & {type?:string}).type === 'entity.too.large') return sendError(res,413,'File hoặc dữ liệu gửi lên vượt dung lượng cho phép.');
   return sendError(res, 500, 'Lỗi máy chủ nội bộ', [err.message]);
 }

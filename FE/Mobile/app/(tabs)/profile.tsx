@@ -110,6 +110,10 @@ export default function ProfileScreen() {
 
 <Text style={styles.menuLabel}>MUA SẮM & GIAO NHẬN</Text>
         <View style={styles.menu}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Voucher của tôi" style={styles.menuItem} onPress={() => router.push('/vouchers')}>
+            <MaterialIcons name="local-offer" size={22} color="#176B52" /><Text style={styles.menuText}>Voucher của tôi</Text><MaterialIcons name="chevron-right" size={23} color="#84938B" />
+          </Pressable>
+          {[['addresses','Sổ địa chỉ'],['notifications','Thông báo'],['password','Đổi mật khẩu']].map(([section,label])=><Pressable key={section} style={styles.menuItem} onPress={()=>router.push({pathname:'/account-tools' as any,params:{section}})}><Text style={styles.menuText}>{label}</Text><MaterialIcons name="chevron-right" size={23} color="#84938B"/></Pressable>)}
           <Pressable style={styles.menuItem} onPress={() => router.push('/orders' as any)}>
             <MaterialIcons name="receipt-long" size={22} color="#176B52" />
             <Text style={styles.menuText}>Đơn hàng của tôi</Text>

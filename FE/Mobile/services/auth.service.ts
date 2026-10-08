@@ -4,16 +4,18 @@ import api from './api';
 export const authService = {
   login: async (ten_dang_nhap: string, mat_khau: string) => {
     const response = await api.post('/auth/login', { ten_dang_nhap, mat_khau });
-    const { token, user } = response.data.data;
+    const { token, user, refresh_token } = response.data.data;
     await AsyncStorage.setItem('token', token);
+    if(refresh_token)await AsyncStorage.setItem('refresh_token',refresh_token);
     await AsyncStorage.setItem('user', JSON.stringify(user));
     return response.data;
   },
 
   register: async (payload: Record<string, any>) => {
     const response = await api.post('/auth/register', payload);
-    const { token, user } = response.data.data;
+    const { token, user, refresh_token } = response.data.data;
     await AsyncStorage.setItem('token', token);
+    if(refresh_token)await AsyncStorage.setItem('refresh_token',refresh_token);
     await AsyncStorage.setItem('user', JSON.stringify(user));
     return response.data;
   },
@@ -30,6 +32,9 @@ export const authService = {
   },
 
   logout: async () => {
+    const refresh_token=await AsyncStorage.getItem('refresh_token');
+    await AsyncStorage.removeItem('refresh_token');
+    if(refresh_token)void api.post('/auth/logout',{refresh_token}).catch(()=>undefined);
     await AsyncStorage.removeItem('token');
     await AsyncStorage.removeItem('user');
   },

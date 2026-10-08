@@ -1,3 +1,4 @@
+import { CheckoutError } from '../utils/checkout.js';
 import { Request, Response } from 'express';
 import { duplicateField } from '../utils/adminErrors.js';
 import { sendError, sendSuccess } from '../utils/response.js';
@@ -101,17 +102,18 @@ export function extractImagesInput(reqBody: any): {
   primaryImage: string | null;
   allImages: (string | { duong_dan: string; mo_ta?: string | null; la_anh_chinh?: boolean; thu_tu_hien_thi?: number })[];
 } {
+  const imagePath=(value:string)=>value.trim().replace(/^https?:\/\/[^/]+(\/uploads\/[a-f0-9-]+\.(?:jpg|png|webp))$/i,'$1');
   const images = reqBody.danh_sach_hinh_anh || reqBody.images || reqBody.hinh_anh;
-  let primaryImage = typeof reqBody.hinh_anh === 'string' && reqBody.hinh_anh.trim() ? reqBody.hinh_anh.trim() : null;
+  let primaryImage = typeof reqBody.hinh_anh === 'string' && reqBody.hinh_anh.trim() ? imagePath(reqBody.hinh_anh) : null;
   const allImages: (string | { duong_dan: string; mo_ta?: string | null; la_anh_chinh?: boolean; thu_tu_hien_thi?: number })[] = [];
 
   if (Array.isArray(images)) {
     for (const img of images) {
       if (typeof img === 'string' && img.trim()) {
-        allImages.push(img.trim());
+        allImages.push(imagePath(img));
       } else if (img && typeof img === 'object' && img.duong_dan) {
         allImages.push({
-          duong_dan: String(img.duong_dan).trim(),
+          duong_dan: imagePath(String(img.duong_dan)),
           mo_ta: img.mo_ta || null,
           la_anh_chinh: Boolean(img.la_anh_chinh),
           thu_tu_hien_thi: Number(img.thu_tu_hien_thi) || undefined,
@@ -142,6 +144,18 @@ export async function getAllSanPham(req: Request, res: Response) {
     }
     const offset = (Number(page) - 1) * Number(limit);
     const searchTerm = String(search || '').trim();
+    const sort = String(req.query.sort || 'newest');
+    if (!['newest','price_asc','price_desc','bestseller'].includes(sort)) return sendError(res,400,'Kiểu sắp xếp không hợp lệ');
+    for (const value of [ma_danh_muc,ma_thuong_hieu]) if (value!==undefined && (!Number.isSafeInteger(Number(value)) || Number(value)<1)) return sendError(res,400,'Bộ lọc danh mục/thương hiệu không hợp lệ');
+    for (const value of [min_price,max_price]) if (value!==undefined && (!Number.isFinite(Number(value)) || Number(value)<0)) return sendError(res,400,'Khoảng giá không hợp lệ');
+    if (min_price!==undefined && max_price!==undefined && Number(min_price)>Number(max_price)) return sendError(res,400,'Giá tối thiểu lớn hơn giá tối đa');
+    let specificationFilters: Record<string,string>={};
+    if (req.query.specifications!==undefined) {
+      try {
+        specificationFilters=JSON.parse(String(req.query.specifications));
+        if (!specificationFilters || Array.isArray(specificationFilters) || typeof specificationFilters!=='object' || Object.keys(specificationFilters).length>20 || Object.entries(specificationFilters).some(([key,value])=>!/^\d+$/.test(key) || Number(key)<1 || typeof value!=='string' || value.length>200)) throw new Error();
+      } catch {return sendError(res,400,'Bộ lọc thông số không hợp lệ');}
+    }
 
     const result = await sanPhamService.listSanPham([
       searchTerm,
@@ -151,7 +165,7 @@ export async function getAllSanPham(req: Request, res: Response) {
       max_price ? Number(max_price) : null,
       Number(limit),
       offset,
-    ]);
+    ],sort,specificationFilters);
 
     const enrichedRows = result.rows.map(row => ({
       ...row,
@@ -168,6 +182,7 @@ export async function getAllSanPham(req: Request, res: Response) {
       totalPages: Math.ceil(Number(total) / Number(limit)),
     });
   } catch (error) {
+    if (error instanceof CheckoutError) return sendError(res,error.status,error.message);
     if (duplicateField(error, res, 'ma_san_pham_code', 'Mã sản phẩm đã tồn tại')) return;
     return sendError(res, 500, 'Lỗi khi lấy danh sách sản phẩm', [(error as Error).message]);
   }
@@ -207,6 +222,7 @@ export async function getSanPhamById(req: Request, res: Response) {
 
     return sendSuccess(res, 'Sản phẩm được tìm thấy', fullResponse);
   } catch (error) {
+    if (error instanceof CheckoutError) return sendError(res,error.status,error.message);
     if (duplicateField(error, res, 'ma_san_pham_code', 'Mã sản phẩm đã tồn tại')) return;
     return sendError(res, 500, 'Lỗi khi lấy sản phẩm', [(error as Error).message]);
   }
@@ -253,18 +269,35 @@ export async function createSanPham(req: Request, res: Response) {
       });
     }
 
-    if (normalized.length > 0) {
+    {
       const specValidation = await thongSoService.validateSpecificationsForCategory(Number(ma_danh_muc), normalized);
       if (!specValidation.valid) {
         return res.status(400).json({
           success: false,
           message: 'Có thông số không hợp lệ với danh mục sản phẩm',
           invalidSpecIds: specValidation.invalidSpecIds,
+          requiredMissingIds: specValidation.requiredMissingIds,
         });
       }
     }
 
     // Images normalization
+    let normalizedVariants: Parameters<typeof sanPhamService.replaceProductVariants>[1] | undefined;
+    if (variants !== undefined) {
+      if (!Array.isArray(variants)) return sendError(res, 400, 'Danh sách biến thể không hợp lệ');
+      normalizedVariants = variants.map((variant: any) => ({
+        ma_sku: String(variant.ma_sku || '').trim(),
+        ten_bien_the: String(variant.ten_bien_the || '').trim(),
+        gia_ban: Number(variant.gia_ban),
+        so_luong: Number(variant.so_luong),
+        trang_thai: variant.trang_thai || 'DangBan',
+        thong_so_ky_thuat: Array.isArray(variant.thong_so_ky_thuat) ? variant.thong_so_ky_thuat : [],
+      }));
+      if (normalizedVariants.some(variant => !variant.ma_sku || variant.ma_sku.length > 80 || !variant.ten_bien_the || variant.ten_bien_the.length > 100 || !Number.isFinite(variant.gia_ban) || variant.gia_ban <= 0 || variant.gia_ban > 9999999999999 || !Number.isInteger(variant.so_luong) || variant.so_luong < 0 || variant.so_luong > 2147483647 || !['DangBan', 'HetHang', 'NgungBan'].includes(variant.trang_thai))) {
+        return sendError(res, 400, 'Thông tin biến thể không hợp lệ');
+      }
+      if (new Set(normalizedVariants.map(variant => variant.ma_sku)).size !== normalizedVariants.length) return sendError(res, 409, 'SKU biến thể không được trùng nhau');
+    }
     const { primaryImage, allImages } = extractImagesInput(req.body);
 
     const insertId = await sanPhamService.createSanPham(
@@ -282,11 +315,13 @@ export async function createSanPham(req: Request, res: Response) {
         trang_thai || 'DangBan',
         normalized.length > 0 ? JSON.stringify(normalized) : null,
       ],
-      allImages
+      allImages,
+      normalizedVariants
     );
 
     return sendSuccess(res, 'Thêm sản phẩm thành công', { ma_san_pham: insertId });
   } catch (error) {
+    if (error instanceof CheckoutError) return sendError(res,error.status,error.message);
     if (duplicateField(error, res, 'ma_san_pham_code', 'Mã sản phẩm đã tồn tại')) return;
     return sendError(res, 500, 'Lỗi khi thêm sản phẩm', [(error as Error).message]);
   }
@@ -360,6 +395,27 @@ export async function updateSanPham(req: Request, res: Response) {
       thongSoJsonParam = JSON.stringify(normalized);
     }
 
+    let normalizedVariants: Parameters<typeof sanPhamService.replaceProductVariants>[1] | undefined;
+    if (variants !== undefined) {
+      if (!Array.isArray(variants)) return sendError(res, 400, 'Danh sách biến thể không hợp lệ');
+      normalizedVariants = variants.map((variant: any) => ({
+        ma_sku: String(variant.ma_sku || '').trim(),
+        ten_bien_the: String(variant.ten_bien_the || '').trim(),
+        gia_ban: Number(variant.gia_ban),
+        so_luong: Number(variant.so_luong),
+        trang_thai: variant.trang_thai || 'DangBan',
+        thong_so_ky_thuat: Array.isArray(variant.thong_so_ky_thuat) ? variant.thong_so_ky_thuat : [],
+      }));
+      if (normalizedVariants.some(variant => !variant.ma_sku || !variant.ten_bien_the || !Number.isFinite(variant.gia_ban) || variant.gia_ban <= 0 || !Number.isInteger(variant.so_luong) || variant.so_luong < 0 || !['DangBan', 'HetHang', 'NgungBan'].includes(variant.trang_thai))) {
+        return sendError(res, 400, 'Thông tin biến thể không hợp lệ');
+      }
+      if (new Set(normalizedVariants.map(variant => variant.ma_sku)).size !== normalizedVariants.length) return sendError(res, 409, 'SKU biến thể không được trùng nhau');
+    }
+    if (specsInput === undefined && targetDanhMuc !== existingProductData.product.ma_danh_muc) {
+      const validation=await thongSoService.validateSpecificationsForCategory(targetDanhMuc,[]);
+      if (!validation.valid) return res.status(400).json({success:false,message:'Category requires specifications',requiredMissingIds:validation.requiredMissingIds});
+    }
+
     const { primaryImage, allImages } = extractImagesInput(req.body);
 
     await sanPhamService.updateSanPham(
@@ -378,27 +434,13 @@ export async function updateSanPham(req: Request, res: Response) {
         trang_thai || null,
         thongSoJsonParam,
       ],
-      allImages.length > 0 ? allImages : undefined
+      ['danh_sach_hinh_anh','images','hinh_anh'].some(key=>Object.hasOwn(req.body,key)) ? allImages : undefined,
+      normalizedVariants
     );
-    if (variants !== undefined) {
-      if (!Array.isArray(variants)) return sendError(res, 400, 'Danh sách biến thể không hợp lệ');
-      const normalizedVariants = variants.map((variant: any) => ({
-        ma_sku: String(variant.ma_sku || '').trim(),
-        ten_bien_the: String(variant.ten_bien_the || '').trim(),
-        gia_ban: Number(variant.gia_ban),
-        so_luong: Number(variant.so_luong),
-        trang_thai: variant.trang_thai || 'DangBan',
-        thong_so_ky_thuat: Array.isArray(variant.thong_so_ky_thuat) ? variant.thong_so_ky_thuat : [],
-      }));
-      if (normalizedVariants.some(variant => !variant.ma_sku || !variant.ten_bien_the || !Number.isFinite(variant.gia_ban) || variant.gia_ban <= 0 || !Number.isInteger(variant.so_luong) || variant.so_luong < 0 || !['DangBan', 'HetHang', 'NgungBan'].includes(variant.trang_thai))) {
-        return sendError(res, 400, 'Thông tin biến thể không hợp lệ');
-      }
-      if (new Set(normalizedVariants.map(variant => variant.ma_sku)).size !== normalizedVariants.length) return sendError(res, 409, 'SKU biến thể không được trùng nhau');
-      await sanPhamService.replaceProductVariants(id, normalizedVariants);
-    }
 
     return sendSuccess(res, 'Cập nhật sản phẩm thành công', { ma_san_pham: id });
   } catch (error) {
+    if (error instanceof CheckoutError) return sendError(res,error.status,error.message);
     if (duplicateField(error, res, 'ma_san_pham_code', 'Mã sản phẩm đã tồn tại')) return;
     return sendError(res, 500, 'Lỗi khi cập nhật sản phẩm', [(error as Error).message]);
   }
@@ -419,9 +461,10 @@ export async function deleteSanPham(req: Request, res: Response) {
     await sanPhamService.deleteSanPham(id);
     return sendSuccess(res, 'Xóa sản phẩm thành công', { ma_san_pham: id });
   } catch (error) {
+    if (error instanceof CheckoutError) return sendError(res,error.status,error.message);
     if (duplicateField(error, res, 'ma_san_pham_code', 'Mã sản phẩm đã tồn tại')) return;
     if (['ER_ROW_IS_REFERENCED_2', 'ER_ROW_IS_REFERENCED'].includes((error as { code?: string }).code || '')) {
-      return sendError(res, 409, 'Sản phẩm đang được sử dụng trong đơn hàng, không thể xóa.');
+      return sendError(res, 409, 'Sản phẩm có dữ liệu liên kết như đơn hàng hoặc phiếu nhập kho, không thể xóa để giữ lịch sử. Hãy chuyển trạng thái sang Ngừng bán nếu không còn kinh doanh.');
     }
     return sendError(res, 500, 'Lỗi khi xóa sản phẩm', [(error as Error).message]);
   }

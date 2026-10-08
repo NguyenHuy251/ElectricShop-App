@@ -33,8 +33,8 @@ export default function CartScreen() {
     setUpdating(true);
     setError('');
     try {
-      if (quantity <= 0) await cartService.removeCartItem(item.ma_san_pham);
-      else await cartService.updateCartItem(item.ma_san_pham, quantity);
+      if (quantity <= 0) await cartService.removeCartItem(item.ma_san_pham, item.ma_bien_the);
+      else await cartService.updateCartItem(item.ma_san_pham, quantity, item.ma_bien_the);
       await loadCart();
     } catch (err) { setError(getApiMessage(err, 'Không thể cập nhật giỏ hàng.')); }
     finally { busy.current = false; setUpdating(false); }
@@ -47,10 +47,11 @@ export default function CartScreen() {
       <ScreenHeading eyebrow="GIỎ HÀNG CỦA BẠN" title="Sắp về với tổ ấm" subtitle="Kiểm tra sản phẩm rồi tiếp tục đến bước thanh toán." icon="shopping-bag" />
       {error ? <View accessibilityRole="alert" style={styles.errorBox}><Text style={styles.error}>{error}</Text><Pressable onPress={loadCart}><Text style={styles.link}>Tải lại giỏ hàng</Text></Pressable></View> : null}
       {!items.length ? <EmptyState icon="shopping-bag" title="Giỏ hàng chờ bạn chọn" action="Khám phá sản phẩm" onAction={() => router.push('/products')} /> : <>
-        {items.map(item => <View style={styles.item} key={item.ma_san_pham}>
+        {items.map(item => <View style={styles.item} key={`${item.ma_san_pham}:${item.ma_bien_the || 0}`}>
           <ProductImage uri={item.hinh_anh} style={styles.image} />
           <View style={styles.info}>
             <Text style={styles.name}>{item.ten_san_pham}</Text>
+            {item.ten_bien_the ? <Text style={styles.muted}>{item.ten_bien_the}</Text> : null}
             <Text style={styles.price}>{formatCurrency(item.gia_ban)}</Text>
             {item.trang_thai !== 'DangBan' || Number(item.ton_kho) < item.so_luong ? <Text style={styles.error}>Sản phẩm không bán hoặc không đủ tồn kho.</Text> : null}
             <View style={styles.quantity}>
