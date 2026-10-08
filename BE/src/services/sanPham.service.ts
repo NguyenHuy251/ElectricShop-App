@@ -1,3 +1,5 @@
+import { CheckoutError } from '../utils/checkout.js';
+import type { PoolConnection } from 'mysql2/promise';
 import { pool } from '../config/database.js';
 import { callProcedure, firstResult, secondResult } from './procedure.service.js';
 import type { Product, ProductImage, ProductSpecification } from '../types/index.js';
@@ -41,27 +43,49 @@ export function normalizeProductRow(row: any): Product {
   };
 }
 
-export async function replaceProductVariants(productId: number, variants: { ma_sku: string; ten_bien_the: string; gia_ban: number; so_luong: number; trang_thai: string; thong_so_ky_thuat: unknown[] }[]) {
-  const connection = await pool.getConnection();
+export async function replaceProductVariants(productId: number, variants: { ma_sku: string; ten_bien_the: string; gia_ban: number; so_luong: number; trang_thai: string; thong_so_ky_thuat: unknown[] }[], transaction?: PoolConnection) {
+  const connection = transaction || await pool.getConnection();
   try {
-    await connection.beginTransaction();
-    await connection.execute('DELETE FROM san_pham_bien_the WHERE ma_san_pham = ?', [productId]);
+    if (!transaction) await connection.beginTransaction();
+    // Retain IDs referenced by carts and historical orders, including retired variants.
+    await connection.execute("UPDATE san_pham_bien_the SET trang_thai = 'NgungBan' WHERE ma_san_pham = ?", [productId]);
     for (const variant of variants) {
+      const [conflicts] = await connection.query('SELECT ma_san_pham, ma_sku FROM san_pham_bien_the WHERE ma_sku = ? OR (ma_san_pham = ? AND ten_bien_the = ?) FOR UPDATE',[variant.ma_sku,productId,variant.ten_bien_the]);
+      if ((conflicts as {ma_san_pham:number;ma_sku:string}[]).some(row=>row.ma_san_pham!==productId || row.ma_sku!==variant.ma_sku)) throw new CheckoutError(409, 'SKU hoặc tên biến thể đã được sử dụng.');
       await connection.execute(
-        'INSERT INTO san_pham_bien_the (ma_san_pham, ma_sku, ten_bien_the, gia_ban, so_luong, trang_thai, thong_so_json) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        'INSERT INTO san_pham_bien_the (ma_san_pham, ma_sku, ten_bien_the, gia_ban, so_luong, trang_thai, thong_so_json) VALUES (?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE ten_bien_the = VALUES(ten_bien_the), gia_ban = VALUES(gia_ban), so_luong = VALUES(so_luong), trang_thai = VALUES(trang_thai), thong_so_json = VALUES(thong_so_json)',
         [productId, variant.ma_sku, variant.ten_bien_the, variant.gia_ban, variant.so_luong, variant.trang_thai, JSON.stringify(variant.thong_so_ky_thuat || [])],
       );
     }
-    await connection.commit();
+    if (!transaction) await connection.commit();
   } catch (error) {
-    await connection.rollback();
+    if (!transaction) await connection.rollback();
     throw error;
   } finally {
-    connection.release();
+    if (!transaction) connection.release();
   }
 }
 
-export async function listSanPham(params: unknown[]) {
+export async function listSanPham(params: unknown[], sort = 'newest', specifications: Record<string,string> = {}) {
+  if (sort !== 'newest' || Object.keys(specifications).length) {
+    const [search,category,brand,min,max,limit,offset] = params;
+    const clauses = ['(? = \'\' OR sp.ten_san_pham LIKE ? OR sp.ma_san_pham_code LIKE ? OR dm.ten_danh_muc LIKE ?)'];
+    const pattern=`%${search}%`;
+    const bindings: unknown[]=[search,pattern,pattern,pattern];
+    for (const [value,clause] of [[category,'sp.ma_danh_muc = ?'],[brand,'sp.ma_thuong_hieu = ?'],[min,'sp.gia_ban >= ?'],[max,'sp.gia_ban <= ?']]) {
+      if (value!=null) {clauses.push(String(clause));bindings.push(value);}
+    }
+    for (const [key,value] of Object.entries(specifications)) {
+      clauses.push(`EXISTS (SELECT 1 FROM thong_so_san_pham tsp WHERE tsp.ma_san_pham=sp.ma_san_pham AND tsp.ma_thong_so=? AND (tsp.gia_tri=? OR CAST(tsp.gia_tri_so AS CHAR)=? OR CAST(tsp.gia_tri_bool AS CHAR)=?))`);
+      bindings.push(Number(key),value,value,value);
+    }
+    const from=' FROM san_pham sp LEFT JOIN danh_muc dm ON dm.ma_danh_muc=sp.ma_danh_muc LEFT JOIN thuong_hieu th ON th.ma_thuong_hieu=sp.ma_thuong_hieu';
+    const where=` WHERE ${clauses.join(' AND ')}`;
+    const [count] = await pool.query('SELECT COUNT(*) AS total'+from+where,bindings);
+    const ordering: Record<string,string>={newest:'sp.ma_san_pham DESC',price_asc:'sp.gia_ban ASC,sp.ma_san_pham DESC',price_desc:'sp.gia_ban DESC,sp.ma_san_pham DESC',bestseller:"(SELECT COALESCE(SUM(ct.so_luong),0) FROM chi_tiet_don_hang ct JOIN don_hang dh USING(ma_don_hang) WHERE ct.ma_san_pham=sp.ma_san_pham AND dh.trang_thai='DaGiao') DESC,sp.ma_san_pham DESC"};
+    const [rows]=await pool.query('SELECT sp.*,dm.ten_danh_muc,th.ten_thuong_hieu'+from+where+` ORDER BY ${ordering[sort]} LIMIT ? OFFSET ?`,[...bindings,limit,offset]);
+    return {count:count as {total:number}[],rows:(rows as any[]).map(normalizeProductRow)};
+  }
   const resultSets = await callProcedure(sanPhamProcedures.list, params);
   const count = firstResult<{ total: number }>(resultSets);
   const rows = secondResult<any>(resultSets).map(normalizeProductRow);
@@ -84,9 +108,10 @@ export async function findSanPhamByCode(code: string) {
 
 export async function syncProductImages(
   ma_san_pham: number,
-  images: (string | { duong_dan: string; mo_ta?: string | null; la_anh_chinh?: boolean; thu_tu_hien_thi?: number })[]
+  images: (string | { duong_dan: string; mo_ta?: string | null; la_anh_chinh?: boolean; thu_tu_hien_thi?: number })[],
+  transaction?: PoolConnection
 ) {
-  if (!Array.isArray(images) || images.length === 0) return;
+  if (!Array.isArray(images)) return;
 
   const normalized = images.map((item, index) => {
     if (typeof item === 'string') {
@@ -105,16 +130,18 @@ export async function syncProductImages(
     };
   }).filter(img => img.duong_dan.length > 0);
 
-  if (normalized.length === 0) return;
-
-  // Ensure exactly one main image
-  const hasPrimary = normalized.some(img => img.la_anh_chinh);
-  if (!hasPrimary) {
-    normalized[0].la_anh_chinh = true;
+  if (normalized.length === 0) {
+    await (transaction || pool).execute('DELETE FROM hinh_anh_san_pham WHERE ma_san_pham=?',[ma_san_pham]);
+    await (transaction || pool).execute('UPDATE san_pham SET hinh_anh=NULL WHERE ma_san_pham=?',[ma_san_pham]);
+    return;
   }
 
+  // Ensure exactly one main image
+  const primaryIndex=Math.max(0,normalized.findIndex(img=>img.la_anh_chinh));
+  normalized.forEach((img,index)=>{img.la_anh_chinh=index===primaryIndex;});
+
   // Clear existing images and insert new set
-  await pool.query('DELETE FROM hinh_anh_san_pham WHERE ma_san_pham = ?', [ma_san_pham]);
+  await (transaction || pool).query('DELETE FROM hinh_anh_san_pham WHERE ma_san_pham = ?', [ma_san_pham]);
 
   const insertSql = `
     INSERT INTO hinh_anh_san_pham (ma_san_pham, duong_dan, mo_ta, la_anh_chinh, thu_tu_hien_thi)
@@ -127,41 +154,57 @@ export async function syncProductImages(
     img.la_anh_chinh ? 1 : 0,
     img.thu_tu_hien_thi,
   ]);
-  await pool.query(insertSql, [values]);
+  await (transaction || pool).query(insertSql, [values]);
 
   // Update main image in san_pham table as well for backward compatibility
   const primaryImg = normalized.find(img => img.la_anh_chinh) || normalized[0];
   if (primaryImg) {
-    await pool.query('UPDATE san_pham SET hinh_anh = ? WHERE ma_san_pham = ?', [primaryImg.duong_dan, ma_san_pham]);
+    await (transaction || pool).query('UPDATE san_pham SET hinh_anh = ? WHERE ma_san_pham = ?', [primaryImg.duong_dan, ma_san_pham]);
   }
 }
 
-export async function createSanPham(
-  params: unknown[],
-  images?: (string | { duong_dan: string; mo_ta?: string | null; la_anh_chinh?: boolean; thu_tu_hien_thi?: number })[]
-) {
-  const result = await callProcedure(sanPhamProcedures.create, params);
-  const insertId = (firstResult<{ insertId: number }>(result)[0] || {}).insertId;
+type Images = Parameters<typeof syncProductImages>[1];
+type Variants = Parameters<typeof replaceProductVariants>[1];
 
-  if (insertId && images && images.length > 0) {
-    await syncProductImages(insertId, images);
-  }
-
-  return insertId;
+async function saveProduct(params: unknown[], update: boolean, images?: Images, variants?: Variants) {
+  const db = await pool.getConnection();
+  try {
+    await db.beginTransaction();
+    const values: any[] = update ? params.slice(1) : params;
+    const columns = ['ma_danh_muc','ma_thuong_hieu','ma_san_pham_code','ten_san_pham','mo_ta','gia_nhap','gia_ban','so_luong','bao_hanh','hinh_anh','trang_thai'];
+    let id = update ? Number(params[0]) : 0;
+    if (update) {
+      const [existing] = await db.query('SELECT ma_danh_muc FROM san_pham WHERE ma_san_pham=? FOR UPDATE',[id]);
+      if (!(existing as any[]).length) throw new Error('Product no longer exists');
+      if (values[0] != null && values[0] !== (existing as any[])[0].ma_danh_muc) {
+        await db.execute('DELETE FROM thong_so_san_pham WHERE ma_san_pham=?',[id]);
+      }
+      await db.execute('UPDATE san_pham SET '+columns.map(column=>column+'=COALESCE(?, '+column+')').join(', ')+' WHERE ma_san_pham=?',[...values.slice(0,11),id]);
+    } else {
+      const [result] = await db.execute('INSERT INTO san_pham ('+columns.join(',')+') VALUES ('+columns.map(()=>'?').join(',')+')',values.slice(0,11));
+      id=(result as any).insertId;
+    }
+    if (values[11] != null) {
+      await db.execute('DELETE FROM thong_so_san_pham WHERE ma_san_pham=?',[id]);
+      for (const spec of JSON.parse(String(values[11]))) {
+        await db.execute('INSERT INTO thong_so_san_pham (ma_san_pham,ma_thong_so,gia_tri,gia_tri_so,gia_tri_bool) VALUES (?,?,?,?,?)',[id,spec.ma_thong_so,spec.gia_tri ?? null,spec.gia_tri_so ?? null,spec.gia_tri_bool ?? null]);
+      }
+    }
+    if (images !== undefined) await syncProductImages(id,images,db);
+    if (variants !== undefined) await replaceProductVariants(id,variants,db);
+    await db.commit();
+    return id;
+  } catch (error) {
+    await db.rollback();
+    throw error;
+  } finally {db.release();}
 }
 
-export async function updateSanPham(
-  params: unknown[],
-  images?: (string | { duong_dan: string; mo_ta?: string | null; la_anh_chinh?: boolean; thu_tu_hien_thi?: number })[]
-) {
-  const result = await callProcedure(sanPhamProcedures.update, params);
-  const id = Number(params[0]);
-
-  if (id && images && images.length > 0) {
-    await syncProductImages(id, images);
-  }
-
-  return result;
+export async function createSanPham(params: unknown[], images?: Images, variants?: Variants) {
+  return saveProduct(params,false,images,variants);
+}
+export async function updateSanPham(params: unknown[], images?: Images, variants?: Variants) {
+  return saveProduct(params,true,images,variants);
 }
 
 export async function deleteSanPham(id: number) {

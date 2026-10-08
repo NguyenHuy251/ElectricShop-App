@@ -14,6 +14,9 @@ const CustomersPage = lazy(() => import('./pages/CustomersPage'));
 const EmployeesPage = lazy(() => import('./pages/EmployeesPage'));
 const ReviewsPage = lazy(() => import('./pages/ReviewsPage'));
 const ContactsPage = lazy(() => import('./pages/ContactsPage'));
+const AccountPage = lazy(() => import('./pages/AccountPage'));
+const ReportsPage = lazy(() => import('./pages/ReportsPage'));
+const ShopOperationsPage = lazy(() => import('./pages/ShopOperationsPage'));
 function ProtectedRoute({ adminOnly = false }: { adminOnly?: boolean }) {
   const { user, loading, error, restore, logout } = useAuth();
   if (loading) return <div className="loading-area"><Spin size="large" /></div>;
@@ -30,6 +33,8 @@ export default function App() {
     <Route path="specifications" element={<Navigate to="/category-specifications" replace />} />
     <Route path="brands" element={<BrandsPage />} />
     <Route path="orders" element={<OrdersPage />} /><Route path="reviews" element={<ReviewsPage />} /><Route path="contacts" element={<ContactsPage />} />
-    <Route element={<ProtectedRoute adminOnly />}><Route path="customers" element={<CustomersPage />} /><Route path="employees" element={<EmployeesPage />} /></Route>
+    <Route path="account" element={<AccountPage/>}/><Route path="inventory" element={<ShopOperationsPage key="inventory" kind="inventory"/>}/>
+    <Route path="reports" element={<ReportsPage/>}/>
+    <Route element={<ProtectedRoute adminOnly />}><Route path="vouchers" element={<ShopOperationsPage key="vouchers" kind="vouchers"/>}/><Route path="customers" element={<CustomersPage />} /><Route path="employees" element={<EmployeesPage />} /></Route>
   </Route></Route><Route path="*" element={<Navigate to="/dashboard" replace />} /></Routes></AuthProvider>;
 }

@@ -4,7 +4,8 @@
   "version": "1.0.0",
   "scripts": {
     "start": "expo start",
-    "reset-project": "node ./scripts/reset-project.js",
+    "test": "node --experimental-strip-types --test tests/*.test.mjs",
+    "typecheck": "tsc --noEmit",
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",

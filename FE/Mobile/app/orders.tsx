@@ -6,9 +6,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { EmptyState, LoadingState, ScreenHeading } from '@/components/shop-ui';
 import { CancelOrderButton } from '@/components/cancel-order-button';
 import { shop } from '@/constants/shop-theme';
-import { orderService } from '../../services/order.service';
-import type { Order } from '../../types';
-import { formatCurrency, formatDate, getApiMessage } from '../../utils/format';
+import { orderService } from '@/services/order.service';
+import type { Order } from '@/types';
+import { formatCurrency, formatDate, getApiMessage } from '@/utils/format';
 
 const statusLabel: Record<string, string> = {
   ChoXacNhan: 'Chờ xác nhận',
@@ -52,27 +52,8 @@ export default function OrdersScreen() {
     loadOrders();
   };
 
-  const handleCancel = (orderId: number) => {
-    Alert.alert('Huỷ đơn hàng', 'Bạn có chắc muốn huỷ đơn hàng này không?', [
-      { text: 'Không', style: 'cancel' },
-      {
-        text: 'Huỷ đơn',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await orderService.cancelOrder(orderId);
-            Alert.alert('Thành công', 'Đơn hàng đã được huỷ');
-            await loadOrders();
-          } catch (error) {
-            Alert.alert('Lỗi', getApiMessage(error, 'Không thể huỷ đơn hàng'));
-          }
-        },
-      },
-    ]);
-  };
-
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
+    <SafeAreaView style={styles.safe} edges={['bottom']}>
       <View style={styles.container}>
         <ScreenHeading eyebrow="HÀNH TRÌNH MUA SẮM" title="Đơn hàng của bạn" subtitle="Theo dõi từng món đồ đang đến với tổ ấm." icon="receipt-long" />
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filters} contentContainerStyle={{ gap: 8 }}>

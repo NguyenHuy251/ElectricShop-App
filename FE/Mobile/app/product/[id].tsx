@@ -105,7 +105,7 @@ function ProductDetail({ id, initialQuantity }: { id: string; initialQuantity?: 
     if (!product || !canBuy || busy.current) return;
     busy.current = true; setAdding(true); setError(''); setNotice('');
     try {
-      await cartService.addToCart(product.ma_san_pham, count);
+      await cartService.addToCart(product.ma_san_pham, count, selectedVariant?.ma_bien_the);
       setNotice(`Đã thêm ${count} sản phẩm vào giỏ hàng.`);
     } catch (err: any) {
       setError(getApiMessage(err, 'Không thể thêm sản phẩm vào giỏ hàng.'));
@@ -116,7 +116,7 @@ function ProductDetail({ id, initialQuantity }: { id: string; initialQuantity?: 
   const buyNow = () => {
     if (!product || !canBuy || busy.current) return;
     busy.current = true;
-    router.push({ pathname: '/checkout' as any, params: { source: 'buy_now', productId: String(product.ma_san_pham), quantity: String(count) } });
+    router.push({ pathname: '/checkout' as any, params: { source: 'buy_now', productId: String(product.ma_san_pham), quantity: String(count), ...(selectedVariant ? { variantId: String(selectedVariant.ma_bien_the) } : {}) } });
   };
 
   const imagesList = useMemo(() => {
@@ -443,6 +443,7 @@ function ProductDetail({ id, initialQuantity }: { id: string; initialQuantity?: 
         </View>
 
         <Text style={styles.title}>{product.ten_san_pham}</Text>
+
         <Text style={styles.muted}>Mã: {product.ma_san_pham_code}{product.ten_thuong_hieu ? ` · ${product.ten_thuong_hieu}` : ''}</Text>
         {rating && !reviewError ? <Text style={styles.rating}>★ {rating}/5 · {reviews.length} đánh giá</Text> : null}
         <Text style={styles.price}>{formatCurrency(displayPrice)}</Text>

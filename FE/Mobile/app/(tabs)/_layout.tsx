@@ -44,13 +44,6 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="orders"
-        options={{
-          title: 'Đơn hàng',
-          tabBarIcon: ({ color, focused }) => <View style={{ width: 46, height: 29, borderRadius: 12, backgroundColor: focused ? shop.soft : 'transparent', alignItems: 'center', justifyContent: 'center' }}><MaterialIcons size={22} name="receipt" color={color} /></View>,
-        }}
-      />
-      <Tabs.Screen
         name="profile"
         options={{
           title: 'Tài khoản',

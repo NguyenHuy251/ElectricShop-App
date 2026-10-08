@@ -1,7 +1,8 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import api from '@/services/api';
 import { useCallback, useRef, useState } from 'react';
-import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { CancelOrderButton } from '../../components/cancel-order-button';
 import { OrderProductReview } from '../../components/order-product-review';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -26,6 +27,7 @@ const paymentLabel: Record<string, string> = {
 
 export default function OrderDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const router=useRouter();
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -77,18 +79,27 @@ export default function OrderDetailScreen() {
         </View>
 
         <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Tiến trình đơn hàng</Text>
+          {['ChoXacNhan','DaXacNhan','DangGiao','DaGiao'].map((status,index)=>{
+            const current=['ChoXacNhan','DaXacNhan','DangGiao','DaGiao'].indexOf(order.trang_thai);
+            return <Text key={status} style={[styles.date,{color:index<=current?'#176B52':'#84938B'}]}>{index<=current?'●':'○'} {statusLabel[status]}{status===order.trang_thai?' · Hiện tại':''}</Text>;
+          })}
+          {order.trang_thai==='DaHuy'?<Text style={styles.date}>Đơn hàng đã hủy</Text>:null}
+        </View>
+        <View style={styles.section}>
           <Text style={styles.sectionTitle}>Sản phẩm đã đặt</Text>
-          {(order.items || []).map((item: any) => (
-            <View key={item.ma_san_pham}>
+          {(order.items || []).map((item: any, index: number) => (
+            <View key={`${item.ma_san_pham}:${item.ma_bien_the || 0}`}>
             <View style={styles.item}>
               <View style={styles.itemIcon}><MaterialIcons name="inventory-2" size={20} color="#176B52" /></View>
               <View style={styles.itemInfo}>
                 <Text style={styles.itemName}>{item.ten_san_pham}</Text>
+                {item.ten_bien_the ? <Text style={styles.itemMeta}>{item.ten_bien_the}</Text> : null}
                 <Text style={styles.itemMeta}>{item.so_luong} x {formatCurrency(item.don_gia)}</Text>
               </View>
               <Text style={styles.itemTotal}>{formatCurrency(item.thanh_tien || Number(item.don_gia) * Number(item.so_luong))}</Text>
             </View>
-            {order.can_review && order.trang_thai === 'DaGiao' ? <OrderProductReview key={JSON.stringify([order.ma_don_hang, item.ma_san_pham, order.reviews?.find(review => review.ma_san_pham === item.ma_san_pham)])} orderId={order.ma_don_hang} productId={item.ma_san_pham} review={order.reviews?.find(review => review.ma_san_pham === item.ma_san_pham)} /> : null}
+            {order.can_review && order.trang_thai === 'DaGiao' && order.items?.findIndex(line => line.ma_san_pham === item.ma_san_pham) === index ? <OrderProductReview key={JSON.stringify([order.ma_don_hang, item.ma_san_pham, order.reviews?.find(review => review.ma_san_pham === item.ma_san_pham)])} orderId={order.ma_don_hang} productId={item.ma_san_pham} review={order.reviews?.find(review => review.ma_san_pham === item.ma_san_pham)} /> : null}
             </View>
           ))}
           {order.trang_thai !== 'DaGiao' ? <Text style={styles.date}>{order.trang_thai === 'DaHuy' ? 'Đơn đã hủy không đủ điều kiện đánh giá.' : 'Bạn có thể đánh giá sản phẩm sau khi đơn được giao thành công.'}</Text> : null}

@@ -88,7 +88,10 @@ export async function validateSpecificationsForCategory(
     if (!allowedMap.has(specId)) {
       invalidSpecIds.push(specId);
     } else {
-      providedIds.add(specId);
+      const definition=allowedMap.get(specId)!;
+      const hasValue=definition.kieu_du_lieu==='NUMBER' ? item.gia_tri_so != null && Number.isFinite(Number(item.gia_tri_so)) : definition.kieu_du_lieu==='BOOLEAN' ? typeof item.gia_tri_bool==='boolean' || item.gia_tri_bool===0 || item.gia_tri_bool===1 : typeof item.gia_tri==='string' && item.gia_tri.trim().length>0;
+      if (hasValue) providedIds.add(specId);
+      else invalidSpecIds.push(specId);
     }
   }
 
@@ -100,7 +103,7 @@ export async function validateSpecificationsForCategory(
   }
 
   return {
-    valid: invalidSpecIds.length === 0,
+    valid: invalidSpecIds.length === 0 && requiredMissingIds.length === 0,
     invalidSpecIds,
     requiredMissingIds,
   };

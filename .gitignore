@@ -116,5 +116,5 @@ Desktop.ini
 *.p12
 *.pfx
 
-# Keep Markdown documents local
-*.md
+# Project documentation is tracked alongside the source.
+uploads/

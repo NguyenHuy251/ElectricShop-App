@@ -1,5 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { pool } from '../dist/config/database.js';
+import { migrateCommerce } from './migrate-commerce.mjs';
+import { migrateLocal } from './migrate-local.mjs';
 
 try {
   await pool.query(await readFile(new URL('../migrations/001_checkout.sql', import.meta.url), 'utf8'));
@@ -20,6 +22,13 @@ try {
   console.log('004_contact_statuses.sql applied. Existing data preserved.');
 
   await pool.query(await readFile(new URL('../migrations/005_product_variants.sql', import.meta.url), 'utf8'));
+  // Apply the variant schema before seeding specifications that use this column.
+  const [variantColumns] = await pool.query(
+    "SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'san_pham_bien_the' AND COLUMN_NAME = 'thong_so_json'",
+  );
+  if (!variantColumns.length) await pool.query(await readFile(new URL('../migrations/006_variant_specifications.sql', import.meta.url), 'utf8'));
+  console.log('006_variant_specifications.sql applied. Existing variants preserved.');
+
   await pool.query(
     "INSERT IGNORE INTO san_pham_bien_the (ma_san_pham, ma_sku, ten_bien_the, gia_ban, so_luong) VALUES (1, 'TL001-180L', '180 lít', 6990000, 10), (1, 'TL001-236L', '236 lít', 7990000, 20), (1, 'TL001-300L', '300 lít', 9490000, 8), (21, 'Q001-DEN', 'Màu đen', 1290000, 12), (21, 'Q001-TRANG', 'Màu trắng', 1290000, 13), (21, 'Q001-VANG', 'Màu vàng', 1290000, 5)",
   );
@@ -66,10 +75,23 @@ try {
   await pool.execute('UPDATE san_pham_bien_the SET thong_so_json = ? WHERE ma_sku = ?', [fridgeVariantSpecs.l300, 'TL001-300L']);
   console.log('005_product_variants.sql applied. Sample product variants preserved.');
 
-  const [variantColumns] = await pool.query(
-    "SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'san_pham_bien_the' AND COLUMN_NAME = 'thong_so_json'",
-  );
-  if (!variantColumns.length) await pool.query('ALTER TABLE san_pham_bien_the ADD COLUMN thong_so_json JSON NULL AFTER trang_thai');
-  console.log('006_variant_specifications.sql applied. Existing variants preserved.');
+  const tiviMigration = await readFile(new URL('../migrations/007_tivi_category_specifications.sql', import.meta.url), 'utf8');
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    for (const statement of tiviMigration.split(';').map(sql => sql.trim()).filter(Boolean)) {
+      await connection.query(statement);
+    }
+    await connection.commit();
+    console.log('007_tivi_category_specifications.sql applied. Existing specifications preserved.');
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+
+  await migrateCommerce();
+  await migrateLocal();
 } finally { await pool.end(); }
- 
+

@@ -27,9 +27,10 @@ export async function authenticate(req: AuthRequest, res: Response, next: NextFu
     return sendError(res, 401, 'Token không hợp lệ hoặc đã hết hạn');
   }
   try {
-    const [rows] = await pool.query('SELECT ma_tai_khoan, ten_dang_nhap, vai_tro, trang_thai FROM tai_khoan WHERE ma_tai_khoan = ?', [decoded.ma_tai_khoan]);
-    const user = (rows as { ma_tai_khoan: number; ten_dang_nhap: string; vai_tro: string; trang_thai: string }[])[0];
+    const [rows] = await pool.query('SELECT ma_tai_khoan, ten_dang_nhap, vai_tro, trang_thai, token_version FROM tai_khoan WHERE ma_tai_khoan = ?', [decoded.ma_tai_khoan]);
+    const user = (rows as { ma_tai_khoan: number; ten_dang_nhap: string; vai_tro: string; trang_thai: string; token_version?:number }[])[0];
     if (!user || user.trang_thai !== 'HoatDong') return sendError(res, 401, 'Tài khoản không tồn tại hoặc đã bị khóa');
+    if(Number(decoded.token_version || 0)!==Number(user.token_version || 0))return sendError(res,401,'Mật khẩu đã thay đổi. Vui lòng đăng nhập lại.');
     req.user = { ma_tai_khoan: user.ma_tai_khoan, ten_dang_nhap: user.ten_dang_nhap, vai_tro: user.vai_tro };
     next();
   } catch { return sendError(res, 503, 'Không thể xác thực tài khoản. Vui lòng thử lại.'); }
