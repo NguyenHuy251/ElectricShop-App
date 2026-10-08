@@ -149,6 +149,11 @@ export interface ProductInput {
 }
 
 export interface Order {
+  ma_voucher?: number | null;
+  ma_code?: string | null;
+  tam_tinh?: number | string;
+  giam_gia?: number | string;
+  phi_giao_hang?: number | string;
   ten_dang_nhap?: string;
   ho_ten?: string;
   ma_don_hang: number;
@@ -161,7 +166,7 @@ export interface Order {
   trang_thai: 'ChoXacNhan' | 'DaXacNhan' | 'DangGiao' | 'DaGiao' | 'DaHuy';
   ghi_chu?: string | null;
   ngay_dat?: string;
-  items?: Array<{ ma_don_hang: number; ma_san_pham: number; ten_san_pham: string; so_luong: number; don_gia: number | string; thanh_tien: number | string }>;
+  items?: Array<{ ma_don_hang: number; ma_san_pham: number; ma_bien_the?: number | null; ten_bien_the?: string | null; ten_san_pham: string; so_luong: number; don_gia: number | string; thanh_tien: number | string }>;
 }
 
 export interface DashboardStatistics {

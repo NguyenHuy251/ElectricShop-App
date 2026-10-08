@@ -85,11 +85,15 @@ export async function cancelDonHang(req: AuthRequest, res: Response) {
       }
 
       const [items] = await connection.query(
-        'SELECT ma_san_pham, so_luong FROM chi_tiet_don_hang WHERE ma_don_hang = ? ORDER BY ma_san_pham',
+        'SELECT ma_san_pham, ma_bien_the, so_luong FROM chi_tiet_don_hang WHERE ma_don_hang = ? ORDER BY ma_san_pham, ma_bien_the',
         [id],
       );
 
       for (const item of items as any[]) {
+        if (item.ma_bien_the) {
+          await connection.execute('UPDATE san_pham_bien_the SET so_luong = so_luong + ? WHERE ma_bien_the = ?', [item.so_luong, item.ma_bien_the]);
+          continue;
+        }
         await connection.execute(
           'UPDATE san_pham SET so_luong = so_luong + ? WHERE ma_san_pham = ?',
           [item.so_luong, item.ma_san_pham],

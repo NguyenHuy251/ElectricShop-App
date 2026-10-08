@@ -105,12 +105,16 @@ export interface ProductReview {
 }
 
 export interface CheckoutSelection {
+  ma_code?: string;
+  ma_bien_the?: number;
   source?: 'buy_now';
   ma_san_pham?: number;
   so_luong?: number;
 }
 
 export interface CartItem {
+  ma_bien_the?: number | null;
+  ten_bien_the?: string | null;
   ma_san_pham: number;
   so_luong: number;
   ten_san_pham?: string;
@@ -121,6 +125,7 @@ export interface CartItem {
 }
 
 export interface CheckoutQuote extends CheckoutSelection {
+  giam_gia?: number;
   items: CartItem[];
   tam_tinh: number;
   phi_giao_hang: number;

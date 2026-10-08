@@ -7,25 +7,34 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { EmptyState, LoadingState, ProductImage } from '../components/shop-ui';
 import { authService } from '../services/auth.service';
 import { orderService } from '../services/order.service';
+import api from '../services/api';
 import type { CheckoutPayload, CheckoutQuote, CheckoutSelection } from '../types';
 import { formatCurrency, getApiMessage } from '../utils/format';
+import { VoucherCard } from '../components/voucher-card';
+import { voucherService, type CustomerVoucher } from '../services/voucher.service';
 
 type Form = Pick<CheckoutPayload, 'ho_ten_nguoi_nhan' | 'so_dien_thoai' | 'dia_chi_giao_hang' | 'ghi_chu'>;
 type Attempt = { payload: CheckoutPayload; quote: CheckoutQuote };
 const blank: Form = { ho_ten_nguoi_nhan: '', so_dien_thoai: '', dia_chi_giao_hang: '', ghi_chu: '' };
 
 export default function CheckoutScreen() {
-  const { source, productId, quantity } = useLocalSearchParams<{ source?: string; productId?: string; quantity?: string }>();
+  const { source, productId, quantity, variantId } = useLocalSearchParams<{ source?: string; productId?: string; quantity?: string; variantId?: string }>();
   const router = useRouter();
-  if ((source !== undefined && source !== 'cart' && source !== 'buy_now') || (source !== 'buy_now' && (productId !== undefined || quantity !== undefined)) || (source === 'buy_now' && (!/^\d+$/.test(productId || '') || !Number.isSafeInteger(Number(productId)) || !/^\d+$/.test(quantity || '') || Number(productId) < 1 || Number(quantity) < 1 || Number(quantity) > 999))) {
+  if ((variantId !== undefined && (source !== 'buy_now' || !/^\d+$/.test(variantId) || !Number.isSafeInteger(Number(variantId)) || Number(variantId) < 1)) || (source !== undefined && source !== 'cart' && source !== 'buy_now') || (source !== 'buy_now' && (productId !== undefined || quantity !== undefined)) || (source === 'buy_now' && (!/^\d+$/.test(productId || '') || !Number.isSafeInteger(Number(productId)) || !/^\d+$/.test(quantity || '') || Number(productId) < 1 || Number(quantity) < 1 || Number(quantity) > 999))) {
     return <EmptyState icon="error-outline" title="Thông tin mua hàng không hợp lệ" action="Chọn sản phẩm" onAction={() => router.replace('/products')} />;
   }
-  return <CheckoutContent key={`${source || 'cart'}:${productId}:${quantity}`} initialSelection={source === 'buy_now' ? { source, ma_san_pham: Number(productId), so_luong: Number(quantity) } : {}} />;
+  return <CheckoutContent key={`${source || 'cart'}:${productId}:${quantity}:${variantId}`} initialSelection={source === 'buy_now' ? { source, ma_san_pham: Number(productId), so_luong: Number(quantity), ...(variantId ? { ma_bien_the: Number(variantId) } : {}) } : {}} />;
 }
 
 function CheckoutContent({ initialSelection }: { initialSelection: CheckoutSelection }) {
   const router = useRouter();
   const [selection, setSelection] = useState(initialSelection);
+  const [code,setCode]=useState('');
+  const [showVouchers, setShowVouchers] = useState(false);
+  const [vouchers, setVouchers] = useState<CustomerVoucher[]>([]);
+  const [voucherLoading, setVoucherLoading] = useState(false);
+  const [voucherError, setVoucherError] = useState('');
+  const [addresses,setAddresses]=useState<{ma_dia_chi:number;ho_ten:string;so_dien_thoai:string;dia_chi:string;mac_dinh:boolean}[]>([]);
   const activeSelection = useRef(initialSelection);
   const [form, setForm] = useState<Form>(blank);
   const [quote, setQuote] = useState<CheckoutQuote | null>(null);
@@ -47,7 +56,8 @@ function CheckoutContent({ initialSelection }: { initialSelection: CheckoutSelec
       const saved = await AsyncStorage.getItem(storageKey.current);
       if (saved) {
         const attempt: Attempt = JSON.parse(saved);
-        activeSelection.current = attempt.payload.source === 'buy_now' ? { source: 'buy_now', ma_san_pham: attempt.payload.ma_san_pham, so_luong: attempt.payload.so_luong } : {};
+        activeSelection.current = attempt.payload.source === 'buy_now' ? { source: 'buy_now', ma_san_pham: attempt.payload.ma_san_pham, ma_bien_the: attempt.payload.ma_bien_the, so_luong: attempt.payload.so_luong,ma_code:attempt.payload.ma_code } : {ma_code:attempt.payload.ma_code};
+        setCode(attempt.payload.ma_code || '');
         setSelection(activeSelection.current);
         pending.current = attempt;
         setForm(attempt.payload);
@@ -64,11 +74,33 @@ function CheckoutContent({ initialSelection }: { initialSelection: CheckoutSelec
       .finally(() => setLoading(false)), []);
 
   useEffect(() => { void load(); }, [load]);
+  useEffect(()=>{void api.get('/shop/addresses').then(r=>setAddresses(r.data.data || [])).catch(()=>undefined);},[]);
 
   const change = (key: keyof Form, value: string) => {
     setForm(current => ({ ...current, [key]: value }));
     setFieldErrors(current => ({ ...current, [key]: '' }));
     setConfirmed(false);
+  };
+
+  const applyCoupon = async (value: string) => {
+    if (busy.current) return;
+    busy.current = true; setChecking(true); setError('');
+    try {
+      const next = { ...selection, ma_code: value.trim().toUpperCase() };
+      const result = await orderService.getCheckout(next);
+      setSelection(next); activeSelection.current = next;
+      setCode(next.ma_code); setQuote(result.data); setConfirmed(false);
+      setShowVouchers(false);
+    } catch (err) { setError(getApiMessage(err, 'Chưa thể áp dụng mã giảm giá.')); }
+    finally { busy.current = false; setChecking(false); }
+  };
+
+  const toggleVouchers = async () => {
+    if (showVouchers) { setShowVouchers(false); return; }
+    setShowVouchers(true); setVoucherLoading(true); setVoucherError('');
+    try { setVouchers(await voucherService.getMine(quote?.tam_tinh)); }
+    catch (err) { setVoucherError(getApiMessage(err, 'Không thể tải danh sách voucher.')); }
+    finally { setVoucherLoading(false); }
   };
 
   const checkForm = async () => {
@@ -149,6 +181,7 @@ function CheckoutContent({ initialSelection }: { initialSelection: CheckoutSelec
         <View style={styles.card}>
           <View style={styles.row}><Text style={styles.sectionTitle}>Thông tin nhận hàng</Text>{review && !uncertain && !submitting ? <Pressable onPress={() => { setReview(false); setConfirmed(false); }}><Text style={styles.link}>Chỉnh sửa</Text></Pressable> : null}</View>
           {review ? <View style={{ gap: 8 }}><Text style={styles.name}>{form.ho_ten_nguoi_nhan} · {form.so_dien_thoai}</Text><Text style={styles.muted}>{form.dia_chi_giao_hang}</Text>{form.ghi_chu ? <Text style={styles.muted}>Ghi chú: {form.ghi_chu}</Text> : null}</View> : <>
+            {addresses.length ? <View style={{gap:8}}><Text style={styles.label}>Chọn từ sổ địa chỉ</Text>{addresses.map(a=><Pressable key={a.ma_dia_chi} disabled={checking || submitting} onPress={()=>{setForm(current=>({...current,ho_ten_nguoi_nhan:a.ho_ten,so_dien_thoai:a.so_dien_thoai,dia_chi_giao_hang:a.dia_chi}));setConfirmed(false);}}><Text style={styles.link}>{a.ho_ten} · {a.dia_chi}{a.mac_dinh?' (Mặc định)':''}</Text></Pressable>)}</View> : null}
             {field('ho_ten_nguoi_nhan', 'Họ tên người nhận *', 'Nhập họ và tên', 100)}
             {field('so_dien_thoai', 'Số điện thoại *', 'Ví dụ: 0912345678', 20)}
             {field('dia_chi_giao_hang', 'Địa chỉ nhận hàng *', 'Số nhà, đường, phường/xã, tỉnh/thành phố', 255, true)}
@@ -158,9 +191,9 @@ function CheckoutContent({ initialSelection }: { initialSelection: CheckoutSelec
         </View>
         <View style={styles.card}>
           <View style={styles.row}><Text style={styles.sectionTitle}>Sản phẩm trong đơn</Text>{!uncertain && !submitting ? <Pressable accessibilityRole="button" onPress={() => selection.source === 'buy_now' ? router.replace({ pathname: '/product/[id]', params: { id: String(selection.ma_san_pham), quantity: String(selection.so_luong) } }) : router.replace('/cart')}><Text style={styles.link}>{selection.source === 'buy_now' ? 'Đổi số lượng' : 'Sửa giỏ hàng'}</Text></Pressable> : null}</View>
-          {quote.items.map(item => <View key={item.ma_san_pham} style={styles.product}>
+          {quote.items.map(item => <View key={`${item.ma_san_pham}:${item.ma_bien_the || 0}`} style={styles.product}>
             <ProductImage uri={item.hinh_anh} style={styles.image} />
-            <View style={{ flex: 1 }}><Text style={styles.name}>{item.ten_san_pham}</Text><Text style={styles.muted}>{item.so_luong} × {formatCurrency(item.gia_ban)}</Text></View>
+            <View style={{ flex: 1 }}><Text style={styles.name}>{item.ten_san_pham}{item.ten_bien_the ? ` - ${item.ten_bien_the}` : ''}</Text><Text style={styles.muted}>{item.so_luong} × {formatCurrency(item.gia_ban)}</Text></View>
             <Text style={styles.amount}>{formatCurrency(Number(item.gia_ban) * item.so_luong)}</Text>
           </View>)}
           {quote.issues.map((issue, index) => <Text key={index} style={styles.errorText}>{issue}</Text>)}
@@ -173,7 +206,16 @@ function CheckoutContent({ initialSelection }: { initialSelection: CheckoutSelec
         </View>
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Chi tiết thanh toán</Text>
+          {!review && !uncertain ? <View style={{ gap: 10 }}>
+            <Pressable accessibilityRole="button" accessibilityState={{ expanded: showVouchers }} disabled={checking || submitting || voucherLoading} onPress={() => void toggleVouchers()}><Text style={styles.link}>{showVouchers ? 'Ẩn danh sách voucher' : 'Chọn voucher'}</Text></Pressable>
+            {showVouchers ? voucherLoading ? <Text style={styles.muted}>Đang tải voucher...</Text> : voucherError ? <Text accessibilityRole="alert" style={styles.errorText}>{voucherError}</Text> : vouchers.length ? vouchers.map(v => <VoucherCard key={v.ma_voucher} voucher={v} selected={selection.ma_code === v.ma_code} disabled={checking || submitting} onSelect={() => void applyCoupon(v.ma_code)} />) : <Text style={styles.muted}>Chưa có voucher còn hiệu lực cho tài khoản của bạn.</Text> : null}
+          </View> : null}
+          {!review && !uncertain ? <View style={{gap:8}}><TextInput accessibilityLabel="Mã giảm giá" editable={!checking && !submitting} placeholder="Nhập mã giảm giá" autoCapitalize="characters" autoCorrect={false} value={code} onChangeText={setCode} maxLength={40} style={styles.input}/><View style={styles.row}>
+            <Pressable accessibilityRole="button" disabled={checking || submitting} onPress={()=>void applyCoupon(code)}><Text style={styles.link}>{checking?'Đang kiểm tra...':'Áp dụng mã'}</Text></Pressable>
+            {selection.ma_code ? <Pressable accessibilityRole="button" disabled={checking || submitting} onPress={()=>void applyCoupon('')}><Text style={styles.link}>Bỏ mã giảm giá</Text></Pressable> : null}
+          </View>{selection.ma_code ? <Text style={styles.muted}>Đang áp dụng: {selection.ma_code}</Text> : null}</View> : null}
           <View style={styles.row}><Text style={styles.muted}>Tiền hàng</Text><Text style={styles.amount}>{formatCurrency(quote.tam_tinh)}</Text></View>
+          {quote.giam_gia ? <View style={styles.row}><Text style={styles.muted}>Giảm giá</Text><Text style={styles.link}>−{formatCurrency(quote.giam_gia)}</Text></View> : null}
           <View style={styles.row}><Text style={styles.muted}>Phí giao hàng</Text><Text style={styles.link}>{quote.phi_giao_hang === 0 ? 'Miễn phí' : formatCurrency(quote.phi_giao_hang)}</Text></View>
           <View style={[styles.row, styles.total]}><Text style={styles.name}>Tổng thanh toán khi nhận hàng</Text><Text style={styles.totalAmount}>{formatCurrency(quote.tong_tien)}</Text></View>
           {review ? <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: confirmed, disabled: submitting || uncertain }} disabled={submitting || uncertain} onPress={() => setConfirmed(value => !value)} style={styles.payment}><MaterialIcons name={confirmed ? 'check-box' : 'check-box-outline-blank'} color="#176B52" size={24} /><Text style={[styles.muted, { flex: 1 }]}>Tôi đã kiểm tra thông tin nhận hàng, sản phẩm và tổng tiền phải trả.</Text></Pressable> : null}

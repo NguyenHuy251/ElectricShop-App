@@ -139,3 +139,13 @@ test('form validation returns field errors for negative prices and invalid email
   const res = response(); adminValidation({ method: 'POST', path: '/san-pham', body: { gia_ban: -1, email: 'bad' } }, res, () => assert.fail('Accepted invalid data'));
   assert.equal(res.statusCode, 400); assert.ok(res.body.fieldErrors.gia_ban); assert.ok(res.body.fieldErrors.email); assert.ok(res.body.fieldErrors.ten_san_pham);
 });
+
+
+test('required category specifications reject missing or blank values and validate numeric types', async () => {
+  const {validateSpecificationsForCategory}=await import('../dist/services/thongSo.service.js');
+  pool.query=async()=>[[[{ma_thong_so:1,kieu_du_lieu:'TEXT',bat_buoc:1},{ma_thong_so:2,kieu_du_lieu:'NUMBER',bat_buoc:0},{ma_thong_so:3,kieu_du_lieu:'BOOLEAN',bat_buoc:0}]],[]];
+  assert.equal((await validateSpecificationsForCategory(1,[])).valid,false);
+  assert.equal((await validateSpecificationsForCategory(1,[{ma_thong_so:1,gia_tri:' '}])).valid,false);
+  assert.equal((await validateSpecificationsForCategory(1,[{ma_thong_so:1,gia_tri:'Smart TV'},{ma_thong_so:2,gia_tri_so:'invalid'}])).valid,false);
+  assert.equal((await validateSpecificationsForCategory(1,[{ma_thong_so:1,gia_tri:'Smart TV'},{ma_thong_so:2,gia_tri_so:50},{ma_thong_so:3,gia_tri_bool:false}])).valid,true);
+});

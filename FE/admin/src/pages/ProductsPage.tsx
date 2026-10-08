@@ -17,9 +17,11 @@ import {
   Tag,
   Tooltip,
   Typography,
+  Upload,
 } from 'antd';
 import { DeleteOutlined, EditOutlined, EyeOutlined, PlusOutlined, StarFilled, StarOutlined } from '@ant-design/icons';
 import { productApi } from '../api/product.api';
+import { api } from '../api/api';
 import { categoryApi } from '../api/category.api';
 import { brandApi } from '../api/brand.api';
 import { useLoad } from '../hooks/useLoad';
@@ -630,6 +632,11 @@ export default function ProductsPage() {
 
           {/* Multi-Image Section */}
           <Divider orientation="left">Hình ảnh sản phẩm (Hỗ trợ nhiều ảnh)</Divider>
+          <Upload.Dragger accept="image/jpeg,image/png,image/webp" showUploadList={false} disabled={busy} beforeUpload={async(file)=>{
+            if(file.size>5*1024*1024){message.error('Ảnh tối đa 5 MB');return false;}
+            try{const r=await api.post('/uploads',file,{headers:{'Content-Type':file.type}});setImages(current=>[...current,{duong_dan:r.data.data.path || r.data.data.url,la_anh_chinh:current.length===0,thu_tu_hien_thi:current.length+1}]);message.success('Đã tải ảnh');}
+            catch(e){message.error(errorMessage(e));}return false;
+          }}><p>Kéo ảnh vào đây hoặc bấm để chọn từ máy (JPEG, PNG, WebP · tối đa 5 MB)</p></Upload.Dragger>
           <div style={{ marginBottom: 16 }}>
             <Space.Compact style={{ width: '100%' }}>
               <Input
