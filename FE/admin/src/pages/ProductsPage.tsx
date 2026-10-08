@@ -325,6 +325,12 @@ export default function ProductsPage() {
         variants: variants.map((variant, index) => ({
           ...variant,
           ma_sku: variant.ma_sku || generatedVariantSku(values.ma_san_pham_code, variant.ten_bien_the, index),
+          thong_so_ky_thuat: variant.thong_so_ky_thuat
+            ?.map(s => ({
+              ...s,
+              gia_tri: s.gia_tri ? String(s.gia_tri).trim() : '',
+            }))
+            .filter(s => s.gia_tri !== ''),
         })),
       };
 
@@ -729,9 +735,18 @@ export default function ProductsPage() {
                   const update = (raw: unknown) => setVariants(current => current.map((item, i) => {
                     if (i !== index) return item;
                     const specs = [...(item.thong_so_ky_thuat || [])].filter(itemSpec => itemSpec.ma_thong_so !== spec.ma_thong_so);
-                    if (raw === undefined || raw === null || String(raw).trim() === '') return { ...item, thong_so_ky_thuat: specs };
-                    const textValue = String(raw).trim();
-                    specs.push({ ma_thong_so: spec.ma_thong_so, ten_thong_so: spec.ten_thong_so, ten_nhom: spec.ten_nhom_thong_so, kieu_du_lieu: spec.kieu_du_lieu, don_vi: spec.don_vi, gia_tri: textValue, gia_tri_so: spec.kieu_du_lieu === 'NUMBER' ? Number(raw) : null, gia_tri_bool: spec.kieu_du_lieu === 'BOOLEAN' ? raw === 'true' : null });
+                    if (raw === undefined || raw === null || raw === '') return { ...item, thong_so_ky_thuat: specs };
+                    const textValue = String(raw);
+                    specs.push({
+                      ma_thong_so: spec.ma_thong_so,
+                      ten_thong_so: spec.ten_thong_so,
+                      ten_nhom: spec.ten_nhom_thong_so,
+                      kieu_du_lieu: spec.kieu_du_lieu,
+                      don_vi: spec.don_vi,
+                      gia_tri: textValue,
+                      gia_tri_so: spec.kieu_du_lieu === 'NUMBER' ? (Number.isNaN(Number(raw)) ? null : Number(raw)) : null,
+                      gia_tri_bool: spec.kieu_du_lieu === 'BOOLEAN' ? raw === 'true' : null,
+                    });
                     return { ...item, thong_so_ky_thuat: specs };
                   }));
                   return <label key={spec.ma_thong_so}><Text type="secondary" style={{ display: 'block', fontSize: 12 }}>{spec.ten_thong_so}{spec.don_vi ? ` (${spec.don_vi})` : ''}</Text>{spec.kieu_du_lieu === 'NUMBER' ? <InputNumber placeholder={`VD: 120${spec.don_vi ? ` ${spec.don_vi}` : ''}`} value={value ? Number(value) : undefined} onChange={update} style={{ width: '100%' }} /> : spec.kieu_du_lieu === 'BOOLEAN' ? <Select value={value || undefined} allowClear placeholder="Chọn Có hoặc Không" options={[{ value: 'true', label: 'Có' }, { value: 'false', label: 'Không' }]} onChange={update} style={{ width: '100%' }} /> : <Input value={value} placeholder={spec.kieu_du_lieu === 'OPTION' ? 'VD: Màu đen hoặc 3 cánh' : 'Nhập thông số'} onChange={event => update(event.target.value)} />}</label>;

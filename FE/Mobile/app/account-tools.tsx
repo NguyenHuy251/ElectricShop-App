@@ -12,7 +12,7 @@ type Notification={ma_thong_bao:number;noi_dung:string;ma_don_hang?:number;da_do
 const blank={ho_ten:'',so_dien_thoai:'',dia_chi:'',mac_dinh:false};
 export default function AccountToolsScreen(){
   const {section}=useLocalSearchParams<{section?:string}>();
-  const key=['addresses','notifications','password'].includes(section || '') ? section! : 'addresses';
+  const key = section === 'password' ? 'password' : 'password';
   return <Tools key={key} section={key}/>;
 }
 function Tools({section}:{section:string}){

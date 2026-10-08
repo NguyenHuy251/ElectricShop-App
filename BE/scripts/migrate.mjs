@@ -75,12 +75,6 @@ try {
   await pool.execute('UPDATE san_pham_bien_the SET thong_so_json = ? WHERE ma_sku = ?', [fridgeVariantSpecs.l300, 'TL001-300L']);
   console.log('005_product_variants.sql applied. Sample product variants preserved.');
 
-  const [variantColumns] = await pool.query(
-    "SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'san_pham_bien_the' AND COLUMN_NAME = 'thong_so_json'",
-  );
-  if (!variantColumns.length) await pool.query('ALTER TABLE san_pham_bien_the ADD COLUMN thong_so_json JSON NULL AFTER trang_thai');
-  console.log('006_variant_specifications.sql applied. Existing variants preserved.');
-
   const tiviMigration = await readFile(new URL('../migrations/007_tivi_category_specifications.sql', import.meta.url), 'utf8');
   const connection = await pool.getConnection();
   try {

@@ -13,8 +13,10 @@ Mở ba terminal tại thư mục chứa `BE` và `FE`:
 ```powershell
 cd BE
 npm ci
-# Với database đã có bảng/thông số của dự án: cập nhật schema, không nạp lại dữ liệu mẫu
-npm run migrate:safe
+# Cập nhật schema (lưu ý: ghi lại thông số mẫu của vài biến thể demo). Backend cũng tự bổ sung token_version/auth_sessions khi khởi động.
+npm run migrate
+# (Tùy chọn) nạp dữ liệu mẫu ~60 bản ghi mỗi bảng, chạy lại không bị trùng
+npm run seed
 npm run dev
 ```
 
@@ -34,11 +36,7 @@ Backend: `http://localhost:3000/api/health`. Admin: `http://localhost:5173`. Mob
 
 Admin dùng `VITE_API_URL=http://localhost:3000/api`. Mobile dùng `EXPO_PUBLIC_API_URL=auto`, `EXPO_PUBLIC_BACKEND_PORT=3000` để lấy IP của máy chạy Expo. Điện thoại và máy tính cần cùng Wi-Fi; cho phép Node.js/cổng 3000 qua Windows Firewall trên mạng riêng. Android Emulator có thể đặt `EXPO_PUBLIC_API_URL=http://10.0.2.2:3000/api`. Khởi động lại Expo sau khi đổi `.env`.
 
-`migrate:safe` yêu cầu database đã có hệ thống thông số chuẩn hóa. Nếu cài trên máy mới, nhập bản backup đầy đủ gồm bảng, dữ liệu, stored procedure và trigger. Không dùng script nạp mẫu để nâng cấp database đang làm việc.
-
 Database hiện có phải được chuyển bằng bản backup có bảng, dữ liệu, stored procedure và trigger. **Không chạy `BE/database/database.sql` trên database đang dùng**: file đó có `DROP DATABASE`.
-
-Xem [QUY_TRINH_NGHIEP_VU.md](QUY_TRINH_NGHIEP_VU.md) để chạy kịch bản demo khách hàng và nhân viên. Cấu hình triển khai online đã chuẩn bị trong [DEPLOYMENT.md](DEPLOYMENT.md), hiện chưa triển khai.
 
 ## Kiểm tra mã nguồn
 
@@ -65,7 +63,6 @@ npm run typecheck
 npm test
 ```
 
-CI trong `.github/workflows/check.yml` chạy kiểm thử backend/MySQL, build/E2E Admin và typecheck/test Mobile.
 
 ## Chức năng bổ sung
 
@@ -77,7 +74,3 @@ CI trong `.github/workflows/check.yml` chạy kiểm thử backend/MySQL, build/
 - Phiếu nhập kho theo sản phẩm hoặc biến thể, lịch sử nhập, báo cáo theo khoảng ngày, sản phẩm bán chạy/tồn thấp.
 - Upload JPEG/PNG/WebP tối đa 5 MB, hồ sơ/đổi mật khẩu, refresh token có xoay vòng và vô hiệu hóa phiên sau khi đổi mật khẩu.
 - Xuất đơn hàng/doanh thu Excel, in phiếu giao hàng và lưu PDF qua trình duyệt.
-
-Stored procedure và dữ liệu cũ được giữ lại. `migrate-deploy.mjs` cập nhật schema, không ghi đè thông số mẫu như script migration phát triển cũ.
-
-Các phần còn lại và trạng thái xác minh nằm trong [TIEN_DO_DU_AN.md](TIEN_DO_DU_AN.md).

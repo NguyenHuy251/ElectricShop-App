@@ -27,8 +27,6 @@ const paymentLabel: Record<string, string> = {
 
 export default function OrderDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const router=useRouter();
-  const [reordering,setReordering]=useState(false);
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -86,7 +84,6 @@ export default function OrderDetailScreen() {
             return <Text key={status} style={[styles.date,{color:index<=current?'#176B52':'#84938B'}]}>{index<=current?'●':'○'} {statusLabel[status]}{status===order.trang_thai?' · Hiện tại':''}</Text>;
           })}
           {order.trang_thai==='DaHuy'?<Text style={styles.date}>Đơn hàng đã hủy</Text>:null}
-          <Pressable accessibilityRole="button" disabled={reordering} onPress={async()=>{if(reordering)return;setReordering(true);try{await api.post(`/shop/orders/${order.ma_don_hang}/reorder`);router.push('/cart');}catch(e){setError(getApiMessage(e,'Chưa thể mua lại đơn.'));}finally{setReordering(false);}}}><Text style={{color:'#176B52',fontWeight:'800'}}>{reordering?'Đang kiểm tra tồn kho...':'Mua lại theo giá hiện tại'}</Text></Pressable>
         </View>
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Sản phẩm đã đặt</Text>

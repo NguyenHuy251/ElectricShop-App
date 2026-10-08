@@ -20,6 +20,27 @@ export async function testConnection() {
   try {
     const connection = await pool.getConnection();
     console.log('Database connected successfully.');
+
+    // Ensure essential columns and tables exist for sessions
+    try {
+      const [columns] = await connection.query("SHOW COLUMNS FROM tai_khoan LIKE 'token_version'");
+      if (!(columns as any[]).length) {
+        await connection.query('ALTER TABLE tai_khoan ADD COLUMN token_version INT NOT NULL DEFAULT 0');
+        console.log('Ensured token_version column in tai_khoan.');
+      }
+      await connection.query(`
+        CREATE TABLE IF NOT EXISTS auth_sessions (
+          token_hash CHAR(64) CHARACTER SET ascii COLLATE ascii_bin PRIMARY KEY,
+          ma_tai_khoan INT NOT NULL,
+          token_version INT NOT NULL,
+          expires_at DATETIME NOT NULL,
+          FOREIGN KEY (ma_tai_khoan) REFERENCES tai_khoan(ma_tai_khoan) ON DELETE CASCADE
+        )
+      `);
+    } catch (migErr) {
+      console.warn('Auto-schema check note:', (migErr as Error).message);
+    }
+
     connection.release();
   } catch (error) {
     console.error('Database connection failed:', error);
