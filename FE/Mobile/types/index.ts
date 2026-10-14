@@ -7,6 +7,9 @@ export interface User {
   dia_chi?: string | null;
   vai_tro: 'Admin' | 'NhanVien' | 'KhachHang';
   trang_thai: 'HoatDong' | 'Khoa';
+  diem_thuong?: number;
+  ma_gioi_thieu?: string;
+  ma_nguoi_gioi_thieu?: string | null;
 }
 
 export interface Contact {

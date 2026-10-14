@@ -1,15 +1,25 @@
-import { readFile } from 'node:fs/promises';
 import { pool } from '../dist/config/database.js';
+import {
+  CHECKOUT_REQUESTS_SQL,
+  PRODUCT_VARIANTS_SQL,
+  VARIANT_SPECIFICATIONS_SQL,
+  TIVI_SPECIFICATIONS_SQL,
+} from './schema-constants.mjs';
 import { migrateCommerce } from './migrate-commerce.mjs';
 import { migrateLocal } from './migrate-local.mjs';
 import { migrateCollations } from './migrate-collations.mjs';
 import { migratePermissions } from './migrate-permissions.mjs';
+import { migrateReports } from './migrate-reports.mjs';
+import { migrateGamification } from './migrate-gamification.mjs';
+import { migrateVouchers } from './migrate-vouchers.mjs';
+import { migrateMilestones } from './migrate-milestones.mjs';
+import { migrateCleanupSchema } from './migrate-cleanup-schema.mjs';
 
 try {
   const collationConnection = await pool.getConnection();
   try { await migrateCollations(collationConnection); } finally { collationConnection.release(); }
-  await pool.query(await readFile(new URL('../migrations/001_checkout.sql', import.meta.url), 'utf8'));
-  console.log('001_checkout.sql applied. Existing data preserved.');
+  await pool.query(CHECKOUT_REQUESTS_SQL);
+  console.log('checkout_requests table verified. Existing data preserved.');
 
   const [columns] = await pool.query(
     "SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'lien_he' AND COLUMN_NAME IN ('phan_hoi', 'ngay_phan_hoi')",
@@ -17,21 +27,21 @@ try {
   const existing = new Set(columns.map(column => column.COLUMN_NAME));
   if (!existing.has('phan_hoi')) await pool.query('ALTER TABLE lien_he ADD COLUMN phan_hoi TEXT NULL AFTER noi_dung');
   if (!existing.has('ngay_phan_hoi')) await pool.query('ALTER TABLE lien_he ADD COLUMN ngay_phan_hoi DATETIME NULL AFTER phan_hoi');
-  console.log('003_contact_replies.sql applied. Existing data preserved.');
+  console.log('lien_he reply columns verified. Existing data preserved.');
 
   await pool.query("ALTER TABLE lien_he MODIFY COLUMN trang_thai ENUM('ChuaXuLy', 'DangXuLy', 'DaXuLy', 'ChoPhanHoi', 'DaPhanHoi') DEFAULT 'ChoPhanHoi'");
   await pool.query("UPDATE lien_he SET trang_thai = 'ChoPhanHoi' WHERE trang_thai IN ('ChuaXuLy', 'DangXuLy')");
   await pool.query("UPDATE lien_he SET trang_thai = 'DaPhanHoi' WHERE trang_thai = 'DaXuLy'");
   await pool.query("ALTER TABLE lien_he MODIFY COLUMN trang_thai ENUM('ChoPhanHoi', 'DaPhanHoi') DEFAULT 'ChoPhanHoi'");
-  console.log('004_contact_statuses.sql applied. Existing data preserved.');
+  console.log('lien_he status column verified. Existing data preserved.');
 
-  await pool.query(await readFile(new URL('../migrations/005_product_variants.sql', import.meta.url), 'utf8'));
+  await pool.query(PRODUCT_VARIANTS_SQL);
   // Apply the variant schema before seeding specifications that use this column.
   const [variantColumns] = await pool.query(
     "SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'san_pham_bien_the' AND COLUMN_NAME = 'thong_so_json'",
   );
-  if (!variantColumns.length) await pool.query(await readFile(new URL('../migrations/006_variant_specifications.sql', import.meta.url), 'utf8'));
-  console.log('006_variant_specifications.sql applied. Existing variants preserved.');
+  if (!variantColumns.length) await pool.query(VARIANT_SPECIFICATIONS_SQL);
+  console.log('san_pham_bien_the specifications column verified. Existing variants preserved.');
 
   await pool.query(
     "INSERT IGNORE INTO san_pham_bien_the (ma_san_pham, ma_sku, ten_bien_the, gia_ban, so_luong) VALUES (1, 'TL001-180L', '180 lít', 6990000, 10), (1, 'TL001-236L', '236 lít', 7990000, 20), (1, 'TL001-300L', '300 lít', 9490000, 8), (21, 'Q001-DEN', 'Màu đen', 1290000, 12), (21, 'Q001-TRANG', 'Màu trắng', 1290000, 13), (21, 'Q001-VANG', 'Màu vàng', 1290000, 5)",
@@ -79,15 +89,14 @@ try {
   await pool.execute('UPDATE san_pham_bien_the SET thong_so_json = ? WHERE ma_sku = ?', [fridgeVariantSpecs.l300, 'TL001-300L']);
   console.log('005_product_variants.sql applied. Sample product variants preserved.');
 
-  const tiviMigration = await readFile(new URL('../migrations/007_tivi_category_specifications.sql', import.meta.url), 'utf8');
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
-    for (const statement of tiviMigration.split(';').map(sql => sql.trim()).filter(Boolean)) {
+    for (const statement of TIVI_SPECIFICATIONS_SQL.split(';').map(sql => sql.trim()).filter(Boolean)) {
       await connection.query(statement);
     }
     await connection.commit();
-    console.log('007_tivi_category_specifications.sql applied. Existing specifications preserved.');
+    console.log('Tivi category specifications verified. Existing specifications preserved.');
   } catch (error) {
     await connection.rollback();
     throw error;
@@ -98,5 +107,11 @@ try {
   await migrateCommerce();
   await migrateLocal();
   await migratePermissions();
+  await migrateReports();
+  await migrateGamification();
+  await migrateVouchers();
+  await migrateMilestones();
+  const cleanupConn = await pool.getConnection();
+  try { await migrateCleanupSchema(cleanupConn); } finally { cleanupConn.release(); }
 } finally { await pool.end(); }
 

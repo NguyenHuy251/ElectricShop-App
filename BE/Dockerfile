@@ -12,7 +12,6 @@ COPY package*.json ./
 RUN npm ci --omit=dev && mkdir -p uploads logs && chown -R node:node /app
 COPY --from=build --chown=node:node /app/dist ./dist
 COPY --chown=node:node scripts ./scripts
-COPY --chown=node:node migrations ./migrations
 COPY --chown=node:node database ./database
 USER node
 EXPOSE 3000

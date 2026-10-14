@@ -53,6 +53,8 @@ export default function RootLayout() {
         <Stack.Screen name="account-tools" options={{ title: 'Đổi mật khẩu' }} />
         <Stack.Screen name="vouchers" options={{ title: 'Voucher của tôi', headerBackTitle: 'Quay lại' }} />
         <Stack.Screen name="orders" options={{ title: 'Đơn hàng của tôi' }} />
+        <Stack.Screen name="rewards" options={{ title: 'Điểm danh & Quà tặng' }} />
+        <Stack.Screen name="referral" options={{ title: 'Mời bạn bè nhận 50K' }} />
       </Stack>
       {routeGroup !== '(auth)' ? <ContactReplyNotice /> : null}
       <StatusBar style="dark" />

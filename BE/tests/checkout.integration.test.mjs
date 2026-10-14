@@ -28,7 +28,8 @@ test('checkout transactions against an isolated MySQL database', { skip: process
     await admin.query(listProcedure.slice(0, -2));
     process.env.DB_NAME = database;
     ({ pool } = await import('../dist/config/database.js'));
-    await admin.query(await readFile(new URL('../migrations/005_product_variants.sql', import.meta.url), 'utf8'));
+    const { PRODUCT_VARIANTS_SQL } = await import('../scripts/schema-constants.mjs');
+    await admin.query(PRODUCT_VARIANTS_SQL);
     const { migrateCommerce } = await import('../scripts/migrate-commerce.mjs');
     for (const name of ['sp_don_hang_update_status','sp_don_hang_cancel']) {
       const start=schema.indexOf('CREATE PROCEDURE '+name+'(');

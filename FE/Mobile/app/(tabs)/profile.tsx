@@ -108,7 +108,61 @@ export default function ProfileScreen() {
           </View>
         ) : null}
 
-<Text style={styles.menuLabel}>MUA SẮM & GIAO NHẬN</Text>
+        {user ? (
+          <View style={styles.rewardSummaryCard}>
+            <View style={styles.rewardSummaryLeft}>
+              <View style={styles.coinCircle}>
+                <MaterialIcons name="monetization-on" size={24} color="#DDF3A3" />
+              </View>
+              <View>
+                <Text style={styles.rewardSummarySub}>Ví Xu tích lũy</Text>
+                <Text style={styles.rewardSummaryValue}>
+                  {user?.diem_thuong != null ? user.diem_thuong.toLocaleString('vi-VN') : '500'} Xu
+                </Text>
+              </View>
+            </View>
+            <Pressable style={styles.rewardSummaryBtn} onPress={() => router.push('/rewards' as any)}>
+              <Text style={styles.rewardSummaryBtnText}>Đổi quà</Text>
+              <MaterialIcons name="arrow-forward" size={16} color="#183C35" />
+            </Pressable>
+          </View>
+        ) : null}
+
+        <Text style={styles.menuLabel}>QUÀ TẶNG & GIỚI THIỆU</Text>
+        <View style={styles.menu}>
+          <Pressable accessibilityRole="button" style={styles.giftMenuItem} onPress={() => router.push('/rewards' as any)}>
+            <View style={[styles.giftIconWrap, { backgroundColor: '#EAF8F0' }]}>
+              <MaterialIcons name="event-available" size={22} color="#176B52" />
+            </View>
+            <View style={styles.giftItemContent}>
+              <View style={styles.giftTitleRow}>
+                <Text style={styles.giftItemTitle}>Điểm danh & Quà tặng</Text>
+                <View style={[styles.giftTagPill, { backgroundColor: '#EAF8F0' }]}>
+                  <Text style={[styles.giftTagText, { color: '#176B52' }]}>+100 Xu</Text>
+                </View>
+              </View>
+              <Text style={styles.giftItemSub}>Nhận xu mỗi ngày, vòng quay may mắn, đổi voucher</Text>
+            </View>
+            <MaterialIcons name="chevron-right" size={22} color="#84938B" />
+          </Pressable>
+          <Pressable accessibilityRole="button" style={[styles.giftMenuItem, styles.giftMenuItemLast]} onPress={() => router.push('/referral' as any)}>
+            <View style={[styles.giftIconWrap, { backgroundColor: '#FFF5EB' }]}>
+              <MaterialIcons name="card-giftcard" size={22} color="#D97706" />
+            </View>
+            <View style={styles.giftItemContent}>
+              <View style={styles.giftTitleRow}>
+                <Text style={styles.giftItemTitle}>Mời bạn bè nhận 50.000đ</Text>
+                <View style={[styles.giftTagPill, { backgroundColor: '#FFF2E8' }]}>
+                  <Text style={[styles.giftTagText, { color: '#D97706' }]}>50K + 500X</Text>
+                </View>
+              </View>
+              <Text style={styles.giftItemSub}>Chia sẻ mã nhận 500 Xu + Voucher cho cả hai</Text>
+            </View>
+            <MaterialIcons name="chevron-right" size={22} color="#84938B" />
+          </Pressable>
+        </View>
+
+        <Text style={styles.menuLabel}>MUA SẮM & GIAO NHẬN</Text>
         <View style={styles.menu}>
           <Pressable accessibilityRole="button" accessibilityLabel="Voucher của tôi" style={styles.menuItem} onPress={() => router.push('/vouchers')}>
             <MaterialIcons name="local-offer" size={22} color="#176B52" /><Text style={styles.menuText}>Voucher của tôi</Text><MaterialIcons name="chevron-right" size={23} color="#84938B" />
@@ -186,4 +240,61 @@ const styles = StyleSheet.create({
   saveButton: { flex: 1, minHeight: 46, borderRadius: 14, backgroundColor: '#176B52', alignItems: 'center', justifyContent: 'center' },
   saveText: { color: '#fff', fontWeight: '800' },
   disabled: { opacity: 0.6 },
+  rewardSummaryCard: { backgroundColor: '#183C35', borderRadius: 20, padding: 16, marginTop: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderWidth: 1, borderColor: '#2C5140' },
+  rewardSummaryLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  coinCircle: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#2C5140', alignItems: 'center', justifyContent: 'center' },
+  rewardSummarySub: { color: '#CFDBD0', fontSize: 11, fontWeight: '600' },
+  rewardSummaryValue: { color: '#DDF3A3', fontSize: 18, fontWeight: '900', marginTop: 2 },
+  rewardSummaryBtn: { backgroundColor: '#DDF3A3', flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 14 },
+  rewardSummaryBtnText: { color: '#183C35', fontSize: 12, fontWeight: '800' },
+  menuSubText: { color: '#6D7D76', fontSize: 11, marginTop: 2 },
+  giftMenuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EDF2E9',
+  },
+  giftMenuItemLast: {
+    borderBottomWidth: 0,
+  },
+  giftIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  giftItemContent: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  giftTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  giftItemTitle: {
+    color: '#183C35',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  giftTagPill: {
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  giftTagText: {
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  giftItemSub: {
+    color: '#6D7D76',
+    fontSize: 11,
+    lineHeight: 16,
+    marginTop: 2,
+  },
 });

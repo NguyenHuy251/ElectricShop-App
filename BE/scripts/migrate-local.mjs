@@ -1,11 +1,10 @@
-import { readFile } from 'node:fs/promises';
 import { pool } from '../dist/config/database.js';
+import { LOCAL_SHOP_SQL } from './schema-constants.mjs';
 
 export async function migrateLocal() {
-  const sql = await readFile(new URL('../migrations/009_local_shop.sql', import.meta.url), 'utf8');
   const connection = await pool.getConnection();
   try {
-    for (const statement of sql.split(';').map(s => s.trim()).filter(Boolean)) await connection.query(statement);
+    for (const statement of LOCAL_SHOP_SQL.split(';').map(s => s.trim()).filter(Boolean)) await connection.query(statement);
     const [columns] = await connection.query('SHOW COLUMNS FROM don_hang');
     const fields = new Set(columns.map(row => row.Field));
     const [accounts]=await connection.query('SHOW COLUMNS FROM tai_khoan');
