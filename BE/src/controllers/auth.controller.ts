@@ -1,10 +1,13 @@
 import bcrypt from 'bcryptjs';
+import { isMobileRequest, mobileStaffMessage, rejectMobileStaff } from '../utils/mobile-access.js';
+import { loadPermissions } from '../services/permission.service.js';
 import { Request, Response } from 'express';
 import { issueSession,refreshSession,revokeSession } from '../services/session.service.js';
 import { CheckoutError } from '../utils/checkout.js';
 import { sendError, sendSuccess } from '../utils/response.js';
 import { AuthRequest } from '../middleware/auth.middleware.js';
 import { authService } from '../services/auth.service.js';
+import { grantVoucherToUser } from '../services/voucher.service.js';
 import { pool } from '../config/database.js';
 
 export async function changePassword(req: AuthRequest, res: Response) {
@@ -23,8 +26,8 @@ export async function changePassword(req: AuthRequest, res: Response) {
 }
 
 export async function refresh(req:Request,res:Response){
-  try{return sendSuccess(res,'Đã gia hạn phiên',await refreshSession(req.body?.refresh_token));}
-  catch(error){return sendError(res,error instanceof CheckoutError ? error.status : 503,error instanceof CheckoutError ? error.message : 'Chưa thể gia hạn phiên.');}
+  try{return sendSuccess(res,'Đã gia hạn phiên',await refreshSession(req.body?.refresh_token,isMobileRequest(req)));}
+  catch(error){if(error instanceof CheckoutError && error.message===mobileStaffMessage)return rejectMobileStaff(res);return sendError(res,error instanceof CheckoutError ? error.status : 503,error instanceof CheckoutError ? error.message : 'Chưa thể gia hạn phiên.');}
 }
 export async function logout(req:Request,res:Response){
   try{await revokeSession(req.body?.refresh_token);return sendSuccess(res,'Đã đăng xuất',null);}
@@ -34,23 +37,65 @@ export async function logout(req:Request,res:Response){
 export async function register(req: Request, res: Response) {
   try {
     const { ten_dang_nhap, mat_khau, ho_ten, email, so_dien_thoai, dia_chi } = req.body;
+    const rawMaMoi = typeof req.body?.ma_moi === 'string' ? req.body.ma_moi.trim().toUpperCase() : '';
 
     if (!ten_dang_nhap || !mat_khau || !ho_ten || !email) {
       return sendError(res, 400, 'Thiếu thông tin bắt buộc');
     }
     if (typeof ten_dang_nhap!=='string' || !/^[A-Za-z0-9_.-]{3,50}$/.test(ten_dang_nhap) || typeof mat_khau!=='string' || mat_khau.length<8 || Buffer.byteLength(mat_khau,'utf8')>72 || typeof ho_ten!=='string' || ho_ten.trim().length<2 || ho_ten.length>100 || typeof email!=='string' || email.length>100 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || (so_dien_thoai && (typeof so_dien_thoai!=='string' || !/^0[35789]\d{8}$/.test(so_dien_thoai))) || (dia_chi && (typeof dia_chi!=='string' || dia_chi.length>255))) return sendError(res,400,'Tên đăng nhập, mật khẩu (8–72 byte), họ tên, email hoặc điện thoại không hợp lệ.');
 
-    const rows = await authService.checkDuplicate(ten_dang_nhap, email);
-    if (rows.length > 0) {
-      return sendError(res, 409, 'Tên đăng nhập hoặc email đã tồn tại');
+    // Kiểm tra trùng từng trường: tên đăng nhập, email, số điện thoại (báo lỗi ngay ở dòng tương ứng)
+    const [dupRows] = await pool.query(
+      'SELECT ten_dang_nhap, email, so_dien_thoai FROM tai_khoan WHERE ten_dang_nhap = ? OR (email IS NOT NULL AND email = ?) OR (so_dien_thoai IS NOT NULL AND so_dien_thoai = ?)',
+      [ten_dang_nhap, email, so_dien_thoai || '']
+    );
+    const duplicateFields: Record<string, string> = {};
+    for (const row of dupRows as any[]) {
+      if (row.ten_dang_nhap === ten_dang_nhap) duplicateFields.ten_dang_nhap = 'Tên đăng nhập đã được sử dụng.';
+      if (row.email === email) duplicateFields.email = 'Email đã được sử dụng.';
+      if (so_dien_thoai && row.so_dien_thoai === so_dien_thoai) duplicateFields.so_dien_thoai = 'Số điện thoại đã được sử dụng.';
+    }
+    if (Object.keys(duplicateFields).length > 0) {
+      return res.status(409).json({
+        success: false,
+        message: 'Tên đăng nhập, email hoặc số điện thoại đã tồn tại trên hệ thống.',
+        fieldErrors: duplicateFields,
+      });
+    }
+
+    // Mã mời (không bắt buộc): phải khớp ma_gioi_thieu của một tài khoản đã có
+    let inviter: { ma_tai_khoan: number; ho_ten: string } | null = null;
+    if (rawMaMoi) {
+      if (!/^[A-Z0-9]{3,30}$/.test(rawMaMoi)) {
+        return res.status(400).json({ success: false, message: 'Mã mời không hợp lệ.', fieldErrors: { ma_moi: 'Mã mời gồm 3–30 chữ cái hoặc số, không dấu.' } });
+      }
+      const [inviterRows] = await pool.query('SELECT ma_tai_khoan, ho_ten FROM tai_khoan WHERE ma_gioi_thieu = ?', [rawMaMoi]);
+      if (!(inviterRows as any[]).length) {
+        return res.status(400).json({ success: false, message: 'Mã mời không tồn tại hoặc không hợp lệ.', fieldErrors: { ma_moi: 'Mã mời không tồn tại hoặc không hợp lệ.' } });
+      }
+      inviter = (inviterRows as any[])[0];
     }
 
     const hashedPassword = await bcrypt.hash(mat_khau, 10);
     const result = await authService.register([ten_dang_nhap, hashedPassword, ho_ten, email, so_dien_thoai || null, dia_chi || null]);
 
     const insertResult = result[0] as { insertId: number };
+    const newAccountId = insertResult.insertId;
+
+    // Sinh mã giới thiệu cho tài khoản mới (trước đây chỉ có migration backfill nên tài khoản mới mãi hiển thị "Đang cập nhật")
+    let maGioiThieu: string | null = null;
+    for (let attempt = 0; attempt < 5 && !maGioiThieu; attempt++) {
+      try {
+        const candidate = `ESHOP${newAccountId}${Math.random().toString(36).substring(2, 5).toUpperCase()}`;
+        await pool.execute('UPDATE tai_khoan SET ma_gioi_thieu = ? WHERE ma_tai_khoan = ?', [candidate, newAccountId]);
+        maGioiThieu = candidate;
+      } catch {
+        // trùng mã (UNIQUE), thử lại với mã khác
+      }
+    }
+
     const user = {
-      ma_tai_khoan: insertResult.insertId,
+      ma_tai_khoan: newAccountId,
       ten_dang_nhap,
       ho_ten,
       email,
@@ -58,11 +103,23 @@ export async function register(req: Request, res: Response) {
       dia_chi: dia_chi || null,
       vai_tro: 'KhachHang',
       trang_thai: 'HoatDong',
+      ...(maGioiThieu ? { ma_gioi_thieu: maGioiThieu } : {}),
     };
 
-    const session = await issueSession(user.ma_tai_khoan,hashedPassword);
+    // Áp dụng mã mời sau khi tạo tài khoản: cả hai bên +500 Xu và đều nhận voucher SHAREAPP50
+    if (inviter) {
+      try {
+        await pool.execute('UPDATE tai_khoan SET ma_nguoi_gioi_thieu = ?, diem_thuong = diem_thuong + 500 WHERE ma_tai_khoan = ?', [inviter.ma_tai_khoan, newAccountId]);
+        await pool.execute('UPDATE tai_khoan SET diem_thuong = diem_thuong + 500 WHERE ma_tai_khoan = ?', [inviter.ma_tai_khoan]);
+        await pool.execute('INSERT INTO lich_su_gioi_thieu (ma_nguoi_moi, ma_nguoi_duoc_moi, diem_thuong) VALUES (?, ?, 500)', [inviter.ma_tai_khoan, newAccountId]);
+        await grantVoucherToUser(pool, newAccountId, 'SHAREAPP50', 'TanThuGioiThieu', 30);
+        await grantVoucherToUser(pool, inviter.ma_tai_khoan, 'SHAREAPP50', 'NguoiMoiGioiThieu', 30);
+      } catch (referralError) {
+        console.error('Apply invite code error:', referralError);
+      }
+    }
 
-    return sendSuccess(res, 'Đăng ký thành công', { ...session, user });
+    return sendSuccess(res, inviter ? `Đăng ký thành công! Bạn đã được kết nối với ${inviter.ho_ten}. Cả hai cùng nhận +500 Xu và Voucher SHAREAPP50.` : 'Đăng ký thành công', { user, da_ap_dung_ma_moi: Boolean(inviter) });
   } catch (error) {
     console.error('Register error:', error);
     return sendError(res, 500, 'Lỗi khi đăng ký', [(error as Error).message]);
@@ -95,7 +152,8 @@ export async function login(req: Request, res: Response) {
       return sendError(res, 403, 'Tài khoản đang bị khóa');
     }
 
-    const session = await issueSession(user.ma_tai_khoan,user.mat_khau);
+    if (isMobileRequest(req) && user.vai_tro === 'NhanVien') return rejectMobileStaff(res);
+    const session = await issueSession(user.ma_tai_khoan,user.mat_khau,undefined,isMobileRequest(req));
 
     const safeUser = {
       ma_tai_khoan: user.ma_tai_khoan,
@@ -106,11 +164,13 @@ export async function login(req: Request, res: Response) {
       dia_chi: user.dia_chi,
       vai_tro: user.vai_tro,
       trang_thai: user.trang_thai,
+      permissions: await loadPermissions(user.ma_tai_khoan, user.vai_tro),
     };
 
     return sendSuccess(res, 'Đăng nhập thành công', { ...session, user: safeUser });
   } catch (error) {
     console.error('Login error:', error);
+    if(error instanceof CheckoutError && error.message===mobileStaffMessage)return rejectMobileStaff(res);
     if ((error as { code?: string }).code === 'ER_ACCESS_DENIED_ERROR') {
       return sendError(res, 503, 'Backend chưa kết nối được MySQL. Kiểm tra DB_USER và DB_PASSWORD trong file .env');
     }
@@ -131,7 +191,7 @@ export async function me(req: AuthRequest, res: Response) {
       return sendError(res, 404, 'Không tìm thấy người dùng');
     }
 
-    return sendSuccess(res, 'Lấy thông tin người dùng thành công', user);
+    return sendSuccess(res, 'Lấy thông tin người dùng thành công', { ...user, permissions: req.user.permissions || [] });
   } catch (error) {
     console.error('Me error:', error);
     return sendError(res, 500, 'Lỗi khi lấy thông tin người dùng', [(error as Error).message]);

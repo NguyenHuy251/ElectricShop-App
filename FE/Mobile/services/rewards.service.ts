@@ -6,11 +6,17 @@ export interface RewardsStatus {
   da_nhap_ma_moi: boolean;
   so_ban_be_da_moi: number;
   tong_thuong_gioi_thieu: number;
+  danh_sach_da_moi?: {
+    ho_ten: string;
+    diem_thuong: number;
+    ngay_tham_gia: string;
+  }[];
   da_diem_danh_hom_nay: boolean;
   chuoi_ngay: number;
   lich_su_diem_danh_tuan: string[];
   lich_su_diem_danh_30_ngay?: string[];
   mocs_da_nhan?: number[];
+  da_quay_hom_nay?: boolean;
   vouchers_doi_thuong: {
     code: string;
     title: string;

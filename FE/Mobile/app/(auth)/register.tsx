@@ -8,7 +8,7 @@ import { validateRegistration, type RegistrationForm } from '../../utils/registr
 
 export default function RegisterScreen() {
   const router = useRouter();
-  const [form, setForm] = useState({ ten_dang_nhap: '', mat_khau: '', ho_ten: '', email: '', so_dien_thoai: '', dia_chi: '' });
+  const [form, setForm] = useState({ ten_dang_nhap: '', mat_khau: '', ho_ten: '', email: '', so_dien_thoai: '', ma_moi: '' });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof RegistrationForm, string>>>({});
@@ -63,8 +63,9 @@ export default function RegisterScreen() {
         {fieldError('email')}
         <AuthField placeholder="Số điện thoại" keyboardType="phone-pad" value={form.so_dien_thoai} onChangeText={(value) => setField('so_dien_thoai', value)} />
         {fieldError('so_dien_thoai')}
-        <AuthField placeholder="Địa chỉ giao hàng" value={form.dia_chi} onChangeText={(value) => setField('dia_chi', value)} />
-        {fieldError('dia_chi')}
+        <AuthField placeholder="Mã mời (nếu có)" autoCapitalize="characters" value={form.ma_moi} onChangeText={(value) => setField('ma_moi', value)} />
+        <Text style={styles.hint}>Có mã mời từ bạn bè? Nhập để nhận ngay +500 Xu và Voucher tân thủ (không bắt buộc).</Text>
+        {fieldError('ma_moi')}
         <Pressable accessibilityRole="button" style={[styles.button, loading && styles.disabled]} onPress={handleRegister} disabled={loading}>
           <Text style={styles.buttonText}>{loading ? 'Đang đăng ký...' : 'Đăng ký'}</Text>
         </Pressable>

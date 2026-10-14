@@ -17,52 +17,11 @@ export async function migrateGamification() {
       await connection.query('ALTER TABLE tai_khoan ADD COLUMN ma_nguoi_gioi_thieu INT NULL');
     }
 
-    // Generate referral code for existing accounts if null
     const [accounts] = await connection.query('SELECT ma_tai_khoan, ten_dang_nhap, ma_gioi_thieu FROM tai_khoan WHERE ma_gioi_thieu IS NULL');
     for (const acc of accounts) {
       const code = `ESHOP${acc.ma_tai_khoan}${Math.random().toString(36).substring(2, 5).toUpperCase()}`;
       await connection.execute('UPDATE tai_khoan SET ma_gioi_thieu = ? WHERE ma_tai_khoan = ?', [code, acc.ma_tai_khoan]);
     }
-
-    // 2. Create table lich_su_diem_danh
-    await connection.query(`
-      CREATE TABLE IF NOT EXISTS lich_su_diem_danh (
-        ma_diem_danh INT AUTO_INCREMENT PRIMARY KEY,
-        ma_tai_khoan INT NOT NULL,
-        ngay_diem_danh DATE NOT NULL,
-        diem_cong INT NOT NULL DEFAULT 100,
-        chuoi_ngay INT NOT NULL DEFAULT 1,
-        qua_tang VARCHAR(255) NULL,
-        ngay_tao DATETIME DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE KEY uq_user_checkin (ma_tai_khoan, ngay_diem_danh),
-        FOREIGN KEY (ma_tai_khoan) REFERENCES tai_khoan(ma_tai_khoan) ON DELETE CASCADE
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-    `);
-
-    // 3. Create table lich_su_gioi_thieu
-    await connection.query(`
-      CREATE TABLE IF NOT EXISTS lich_su_gioi_thieu (
-        ma_gioi_thieu_ls INT AUTO_INCREMENT PRIMARY KEY,
-        ma_nguoi_moi INT NOT NULL,
-        ma_nguoi_duoc_moi INT NOT NULL UNIQUE,
-        diem_thuong INT NOT NULL DEFAULT 500,
-        ma_voucher INT NULL,
-        ngay_tao DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (ma_nguoi_moi) REFERENCES tai_khoan(ma_tai_khoan) ON DELETE CASCADE,
-        FOREIGN KEY (ma_nguoi_duoc_moi) REFERENCES tai_khoan(ma_tai_khoan) ON DELETE CASCADE
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-    `);
-
-    // 4. Update sp_auth_find_by_id procedure to return diem_thuong, ma_gioi_thieu
-    await connection.query('DROP PROCEDURE IF EXISTS sp_auth_find_by_id');
-    await connection.query(`
-      CREATE PROCEDURE sp_auth_find_by_id(IN p_ma_tai_khoan INT)
-      BEGIN
-          SELECT ma_tai_khoan, ten_dang_nhap, ho_ten, email, so_dien_thoai, dia_chi, vai_tro, trang_thai, ngay_tao,
-                 diem_thuong, ma_gioi_thieu, ma_nguoi_gioi_thieu
-          FROM tai_khoan WHERE ma_tai_khoan = p_ma_tai_khoan;
-      END
-    `);
 
     // 5. Ensure demo vouchers exist for rewards exchange and check-in gifts
     const rewardVouchers = [
@@ -70,6 +29,7 @@ export async function migrateGamification() {
       { code: 'CHECKIN14D', giam_tien: 50000, don_toi_thieu: 300000, so_luot: 1000 },
       { code: 'CHECKIN30D', giam_tien: 100000, don_toi_thieu: 500000, so_luot: 1000 },
       { code: 'NEWBIE50K', giam_tien: 50000, don_toi_thieu: 250000, so_luot: 1000 },
+      { code: 'SHAREAPP50', giam_tien: 50000, don_toi_thieu: 0, so_luot: 1000 },
       { code: 'REFERRAL50K', giam_tien: 50000, don_toi_thieu: 200000, so_luot: 1000 },
       { code: 'REWARD20K', giam_tien: 20000, don_toi_thieu: 100000, so_luot: 1000 },
       { code: 'REWARD50K', giam_tien: 50000, don_toi_thieu: 250000, so_luot: 1000 },
