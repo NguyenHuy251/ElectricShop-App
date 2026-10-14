@@ -1,5 +1,6 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import * as Clipboard from 'expo-clipboard';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import {
@@ -28,6 +29,7 @@ export default function ReferralScreen() {
   const [loading, setLoading] = useState(true);
   const [referralInput, setReferralInput] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const loadData = useCallback(async () => {
     try {
@@ -48,9 +50,15 @@ export default function ReferralScreen() {
 
   const myCode = status?.ma_gioi_thieu || '';
 
-  const handleCopyCode = () => {
+  const handleCopyCode = async () => {
     if (!myCode) return;
-    Alert.alert('Đã sao chép mã!', `Mã giới thiệu "${myCode}" đã được sao chép. Bạn có thể gửi cho bạn bè ngay!`);
+    try {
+      await Clipboard.setStringAsync(myCode);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      Alert.alert('Lỗi', 'Không thể sao chép mã. Bạn hãy ghi lại mã bên dưới nhé.');
+    }
   };
 
   const handleShare = async () => {
@@ -76,7 +84,7 @@ export default function ReferralScreen() {
       const res = await rewardsService.enterReferral(referralInput.trim());
       Alert.alert(
         '🎉 Nhận quà thành công!',
-        `Bạn đã kết nối thành công với ${res.nguoi_gioi_thieu}!\nBạn nhận được: +${res.diem_nhan} Xu và Voucher tân thủ "${res.voucher_tan_thu}" trị giá 50.000đ!`,
+        `Bạn đã kết nối thành công với ${res.nguoi_gioi_thieu}!\nCả hai cùng nhận: +${res.diem_nhan} Xu và Voucher "${res.voucher_tan_thu}" giảm 50.000đ cho mọi đơn hàng!`,
         [
           { text: 'Xem kho Voucher', onPress: () => router.push('/vouchers') },
           { text: 'OK', style: 'cancel' },
@@ -123,9 +131,13 @@ export default function ReferralScreen() {
               <View style={styles.codeBox}>
                 <Text style={styles.codeText}>{myCode || 'Đang cập nhật'}</Text>
               </View>
-              <Pressable style={styles.copyBtn} onPress={handleCopyCode}>
-                <MaterialIcons name="content-copy" size={20} color="#183C35" />
-                <Text style={styles.copyBtnText}>Sao chép</Text>
+              <Pressable
+                style={[styles.copyBtn, copied && styles.copyBtnDone]}
+                onPress={handleCopyCode}
+                accessibilityLabel={copied ? 'Đã sao chép mã giới thiệu' : 'Sao chép mã giới thiệu'}
+              >
+                <MaterialIcons name={copied ? 'check' : 'content-copy'} size={20} color="#183C35" />
+                <Text style={styles.copyBtnText}>{copied ? 'Đã sao chép' : 'Sao chép'}</Text>
               </Pressable>
             </View>
 
@@ -182,6 +194,37 @@ export default function ReferralScreen() {
               <Text style={styles.statNumber}>+{(status?.tong_thuong_gioi_thieu || 0).toLocaleString('vi-VN')}</Text>
               <Text style={styles.statLabel}>Xu đã tích lũy</Text>
             </View>
+          </View>
+
+          {/* Invited Friends List */}
+          <View style={styles.sectionCard}>
+            <Text style={styles.cardHeaderTitle}>BẠN BÈ ĐÃ MỜI THÀNH CÔNG</Text>
+            <Text style={styles.cardDesc}>Danh sách bạn bè đã nhập mã mời của bạn và tham gia app.</Text>
+
+            {(status?.danh_sach_da_moi || []).length === 0 ? (
+              <View style={styles.emptyInvitedBox}>
+                <MaterialIcons name="group-add" size={30} color="#9DB3A8" />
+                <Text style={styles.emptyInvitedText}>Chưa có bạn bè nào nhập mã mời. Hãy chia sẻ mã ngay nhé!</Text>
+              </View>
+            ) : (
+              <View style={styles.invitedList}>
+                {(status?.danh_sach_da_moi || []).map((item, index) => (
+                  <View key={index} style={styles.invitedItem}>
+                    <View style={styles.invitedAvatar}>
+                      <Text style={styles.invitedAvatarText}>{item.ho_ten.charAt(0).toUpperCase()}</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.invitedName} numberOfLines={1}>{item.ho_ten}</Text>
+                      <Text style={styles.invitedDate}>Tham gia: {new Date(item.ngay_tham_gia).toLocaleDateString('vi-VN')}</Text>
+                    </View>
+                    <View style={styles.invitedBonus}>
+                      <MaterialCommunityIcons name="bitcoin" size={14} color="#176B52" />
+                      <Text style={styles.invitedBonusText}>+{item.diem_thuong.toLocaleString('vi-VN')}</Text>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            )}
           </View>
 
           {/* 3 Steps Guide */}
@@ -290,6 +333,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   copyBtnText: { color: '#183C35', fontSize: 12, fontWeight: '800' },
+  copyBtnDone: { backgroundColor: '#A8E063' },
 
   shareBtn: {
     backgroundColor: '#EAF4EE',
@@ -353,6 +397,49 @@ const styles = StyleSheet.create({
   statDivider: { width: 1, height: 40, backgroundColor: '#E4ECE5' },
   statNumber: { color: '#183C35', fontSize: 20, fontWeight: '900', marginTop: 4 },
   statLabel: { color: '#768880', fontSize: 11, marginTop: 2 },
+
+  invitedList: { gap: 10 },
+  invitedItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAF7',
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#E8EFE5',
+    gap: 12,
+  },
+  invitedAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#DDF3A3',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  invitedAvatarText: { color: '#183C35', fontSize: 16, fontWeight: '900' },
+  invitedName: { color: '#183C35', fontSize: 13, fontWeight: '800' },
+  invitedDate: { color: '#768880', fontSize: 11, marginTop: 2 },
+  invitedBonus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#EAF5EE',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 10,
+  },
+  invitedBonusText: { color: '#176B52', fontSize: 11, fontWeight: '800' },
+  emptyInvitedBox: {
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 22,
+    backgroundColor: '#F8FAF7',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E8EFE5',
+  },
+  emptyInvitedText: { color: '#768880', fontSize: 12, textAlign: 'center', paddingHorizontal: 20, lineHeight: 18 },
 
   stepRow: { flexDirection: 'row', gap: 14, alignItems: 'flex-start', marginTop: 12 },
   stepNumber: {

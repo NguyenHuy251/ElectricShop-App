@@ -4,6 +4,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import {
   Alert,
+  Linking,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -18,6 +19,8 @@ import {
   type RewardsStatus,
 } from '../services/rewards.service';
 import { formatCurrency, getApiMessage } from '../utils/format';
+
+const QUANG_CAO_LINK = 'https://vn.shp.ee/q9dFvdJn';
 
 export default function RewardsScreen() {
   const router = useRouter();
@@ -102,14 +105,16 @@ export default function RewardsScreen() {
   };
 
   const handleSpin = async () => {
-    if ((status?.diem_thuong || 0) < 100) {
-      Alert.alert('Không đủ xu', 'Bạn cần tối thiểu 100 Xu để quay vòng quay may mắn.');
+    if (status?.da_quay_hom_nay) {
+      Alert.alert('Đã quay hôm nay', 'Bạn đã dùng lượt quay miễn phí hôm nay rồi. Hãy quay lại vào ngày mai nhé!');
       return;
     }
     setSpinning(true);
     try {
+      await Linking.openURL(QUANG_CAO_LINK);
+
       const res = await rewardsService.spinWheel();
-      Alert.alert('🎡 Chúc mừng bạn!', res.prize, [
+      Alert.alert('🎡 Chúc mừng bạn!', `${res.prize}\nLượt quay miễn phí tiếp theo sẽ có vào ngày mai.`, [
         {
           text: 'Xem Voucher',
           onPress: () => router.push('/vouchers'),
@@ -452,9 +457,8 @@ export default function RewardsScreen() {
               <MaterialCommunityIcons name="ferris-wheel" size={24} color="#176B52" />
               <Text style={styles.cardTitle}>Vòng quay may mắn</Text>
             </View>
-            <Tag color="#176B52" text="100 Xu / lượt" />
           </View>
-          <Text style={styles.cardDesc}>Thử vận may mỗi ngày để rinh về Jackpot 500 Xu hoặc Siêu Voucher 50K mua sắm.</Text>
+          <Text style={styles.cardDesc}>Mỗi ngày 1 lượt quay miễn phí rinh về Jackpot 500 Xu hoặc Siêu Voucher 50K mua sắm.</Text>
 
           <View style={styles.spinPreview}>
             <MaterialCommunityIcons name="star-circle" size={48} color="#FFB800" />
@@ -465,13 +469,21 @@ export default function RewardsScreen() {
           </View>
 
           <Pressable
-            style={[styles.spinButton, (spinning || currentPoints < 100) && styles.spinButtonDisabled]}
+            style={[styles.spinButton, (spinning || status?.da_quay_hom_nay) && styles.spinButtonDisabled]}
             onPress={handleSpin}
-            disabled={spinning || currentPoints < 100}
+            disabled={spinning || status?.da_quay_hom_nay}
           >
-            <MaterialCommunityIcons name="play-circle" size={24} color="#183C35" />
-            <Text style={styles.spinButtonText}>
-              {spinning ? 'Đang quay thưởng...' : currentPoints < 100 ? 'Cần tối thiểu 100 Xu' : 'QUAY THƯỞNG NGAY (100 XU)'}
+            <MaterialCommunityIcons
+              name={status?.da_quay_hom_nay ? 'check-circle' : 'play-circle'}
+              size={24}
+              color="#183C35"
+            />
+            <Text style={[styles.spinButtonText, status?.da_quay_hom_nay && styles.spinButtonTextDone]}>
+              {spinning
+                ? 'Đang quay thưởng...'
+                : status?.da_quay_hom_nay
+                ? 'Đã quay hôm nay ✓ Hẹn ngày mai'
+                : 'QUAY NGAY'}
             </Text>
           </Pressable>
         </View>
@@ -824,6 +836,7 @@ const styles = StyleSheet.create({
   },
   spinButtonDisabled: { backgroundColor: '#EDF2EB' },
   spinButtonText: { color: '#183C35', fontSize: 13, fontWeight: '800' },
+  spinButtonTextDone: { color: '#6A7D75' },
 
   voucherList: { gap: 10, marginTop: 6 },
   voucherItem: {

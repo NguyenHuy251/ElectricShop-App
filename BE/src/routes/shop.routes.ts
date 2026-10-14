@@ -530,9 +530,22 @@ router.get('/rewards/status', run(async (req, res) => {
   const [claimedRows] = await pool.query('SELECT moc_ngay FROM lich_su_moc_diem_danh WHERE ma_tai_khoan = ? AND ngay_nhan >= DATE_SUB(NOW(), INTERVAL 30 DAY)', [userId]);
   const claimedMilestones = (claimedRows as any[]).map(r => Number(r.moc_ngay));
 
+  const [spinTodayRows] = await pool.query('SELECT 1 FROM lich_su_vong_quay WHERE ma_tai_khoan = ? AND ngay_quay = CURDATE()', [userId]);
+  const daQuayHomNay = (spinTodayRows as any[]).length > 0;
+
   const [refCountRows] = await pool.query('SELECT COUNT(*) as cnt, COALESCE(SUM(diem_thuong), 0) as total_pts FROM lich_su_gioi_thieu WHERE ma_nguoi_moi = ?', [userId]);
   const refCount = Number((refCountRows as any[])[0]?.cnt || 0);
   const totalRefPts = Number((refCountRows as any[])[0]?.total_pts || 0);
+
+  const [invitedRows] = await pool.query(
+    'SELECT tk.ho_ten, ls.diem_thuong, ls.ngay_tao FROM lich_su_gioi_thieu ls JOIN tai_khoan tk ON tk.ma_tai_khoan = ls.ma_nguoi_duoc_moi WHERE ls.ma_nguoi_moi = ? ORDER BY ls.ngay_tao DESC',
+    [userId]
+  );
+  const danhSachDaMoi = (invitedRows as any[]).map(r => ({
+    ho_ten: r.ho_ten,
+    diem_thuong: Number(r.diem_thuong || 0),
+    ngay_tham_gia: r.ngay_tao,
+  }));
 
   const exchangeVouchers = [
     { code: 'FREESHIP15K', title: 'Voucher Miễn phí vận chuyển 15K', giam_tien: 15000, don_toi_thieu: 150000, xu_can: 200 },
@@ -547,11 +560,13 @@ router.get('/rewards/status', run(async (req, res) => {
     da_nhap_ma_moi: user.ma_nguoi_gioi_thieu !== null,
     so_ban_be_da_moi: refCount,
     tong_thuong_gioi_thieu: totalRefPts,
+    danh_sach_da_moi: danhSachDaMoi,
     da_diem_danh_hom_nay: daDiemDanh,
     chuoi_ngay: currentStreak,
     lich_su_diem_danh_tuan: recentDates,
     lich_su_diem_danh_30_ngay: recentDates,
     mocs_da_nhan: claimedMilestones,
+    da_quay_hom_nay: daQuayHomNay,
     vouchers_doi_thuong: exchangeVouchers,
   });
 }));
@@ -771,13 +786,15 @@ router.post('/rewards/referral', run(async (req, res) => {
       [inviter.ma_tai_khoan, userId]
     );
 
-    await grantVoucherToUser(connection, userId, 'NEWBIE50K', 'TanThuGioiThieu', 30);
+    // Cả hai bên đều nhận voucher SHAREAPP50
+    await grantVoucherToUser(connection, userId, 'SHAREAPP50', 'TanThuGioiThieu', 30);
+    await grantVoucherToUser(connection, inviter.ma_tai_khoan, 'SHAREAPP50', 'NguoiMoiGioiThieu', 30);
 
     await connection.commit();
-    return sendSuccess(res, `Chúc mừng bạn đã kết nối với ${inviter.ho_ten}! Bạn nhận được +500 Xu và Voucher tân thủ NEWBIE50K (đã thêm vào ví).`, {
+    return sendSuccess(res, `Chúc mừng bạn đã kết nối với ${inviter.ho_ten}! Cả hai cùng nhận +500 Xu và Voucher SHAREAPP50 giảm 50.000đ cho mọi đơn hàng (đã thêm vào ví).`, {
       nguoi_gioi_thieu: inviter.ho_ten,
       diem_nhan: 500,
-      voucher_tan_thu: 'NEWBIE50K',
+      voucher_tan_thu: 'SHAREAPP50',
     });
   } catch (err) {
     await connection.rollback();
@@ -830,16 +847,20 @@ router.post('/rewards/exchange', run(async (req, res) => {
 
 router.post('/rewards/spin', run(async (req, res) => {
   const userId = req.user!.ma_tai_khoan;
-  const spinCost = 100;
 
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
+    const [spinTodayRows] = await connection.query(
+      'SELECT 1 FROM lich_su_vong_quay WHERE ma_tai_khoan = ? AND ngay_quay = CURDATE() FOR UPDATE',
+      [userId]
+    );
+    if ((spinTodayRows as any[]).length > 0) {
+      throw new CheckoutError(400, 'Bạn đã quay vòng quay may mắn hôm nay rồi. Hãy quay lại vào ngày mai nhé!');
+    }
+
     const [userRows] = await connection.query('SELECT diem_thuong FROM tai_khoan WHERE ma_tai_khoan = ? FOR UPDATE', [userId]);
     const pts = Number((userRows as any[])[0]?.diem_thuong || 0);
-    if (pts < spinCost) {
-      throw new CheckoutError(400, `Bạn cần tối thiểu ${spinCost} Xu để quay vòng quay may mắn (Hiện có: ${pts} Xu).`);
-    }
 
     const prizes = [
       { text: '+200 Xu Thưởng', points: 200, voucher: null, weight: 25 },
@@ -861,18 +882,21 @@ router.post('/rewards/spin', run(async (req, res) => {
       randomNum -= p.weight;
     }
 
-    const netPoints = wonPrize.points - spinCost;
-    await connection.execute('UPDATE tai_khoan SET diem_thuong = diem_thuong + ? WHERE ma_tai_khoan = ?', [netPoints, userId]);
+    await connection.execute('UPDATE tai_khoan SET diem_thuong = diem_thuong + ? WHERE ma_tai_khoan = ?', [wonPrize.points, userId]);
+    await connection.execute(
+      'INSERT INTO lich_su_vong_quay (ma_tai_khoan, ngay_quay, phan_thuong, diem_cong) VALUES (?, CURDATE(), ?, ?)',
+      [userId, wonPrize.text, wonPrize.points]
+    );
     if (wonPrize.voucher) {
       await grantVoucherToUser(connection, userId, wonPrize.voucher, 'VongQuayMayMan', 30);
     }
     await connection.commit();
 
-    return sendSuccess(res, `Chúc mừng bạn đã trúng: ${wonPrize.text}!`, {
+    return sendSuccess(res, `Chúc mừng bạn đã trúng: ${wonPrize.text}! Lượt quay miễn phí tiếp theo sẽ có vào ngày mai.`, {
       prize: wonPrize.text,
       points_won: wonPrize.points,
       voucher_won: wonPrize.voucher,
-      xu_con_lai: pts + netPoints,
+      xu_con_lai: pts + wonPrize.points,
     });
   } catch (err) {
     await connection.rollback();

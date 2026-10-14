@@ -43,7 +43,7 @@ export default function RootLayout() {
 
   return (
     <ThemeProvider value={{ ...DefaultTheme, colors: { ...DefaultTheme.colors, primary: shop.primary, background: shop.background, card: shop.background, text: shop.ink, border: shop.border } }}>
-      <Stack screenOptions={{ headerShadowVisible: false, headerTintColor: shop.ink, headerStyle: { backgroundColor: shop.background }, headerTitleStyle: { fontSize: 16, fontWeight: '700' }, contentStyle: { backgroundColor: shop.background } }}>
+      <Stack screenOptions={{ headerShadowVisible: false, headerTintColor: shop.ink, headerStyle: { backgroundColor: shop.background }, headerTitleStyle: { fontSize: 16, fontWeight: '700' }, contentStyle: { backgroundColor: shop.background }, headerBackTitle: 'Quay lại' }}>
         <Stack.Screen name="(auth)" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="product/[id]" options={{ title: 'Chi tiết sản phẩm' }} />
