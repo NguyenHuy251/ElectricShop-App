@@ -1,11 +1,27 @@
-export async function exportExcel(filename:string, columns:{header:string;key:string}[], rows:Record<string,unknown>[]) {
+export async function exportExcel(filename:string, columns:{header:string;key:string;width?:number}[], rows:Record<string,unknown>[]) {
   const ExcelJS=await import('exceljs');
   const workbook=new ExcelJS.Workbook();
   const sheet=workbook.addWorksheet('Dữ liệu');
-  sheet.columns=columns.map(c=>({...c,width:26}));
+  sheet.columns=columns.map(c=>({...c,width:c.width || 26}));
   for(const row of rows)sheet.addRow(Object.fromEntries(columns.map(c=>[c.key,row[c.key] ?? ''])));
   sheet.getRow(1).font={bold:true};
   sheet.views=[{state:'frozen',ySplit:1}];
+  const buffer=await workbook.xlsx.writeBuffer();
+  const url=URL.createObjectURL(new Blob([buffer as BlobPart],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
+  const link=document.createElement('a');link.href=url;link.download=`${filename}.xlsx`;link.click();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+
+export async function exportMultiSheetExcel(filename:string, sheets:{sheetName:string;columns:{header:string;key:string;width?:number}[];rows:Record<string,unknown>[]}[]) {
+  const ExcelJS=await import('exceljs');
+  const workbook=new ExcelJS.Workbook();
+  for(const s of sheets) {
+    const sheet=workbook.addWorksheet(s.sheetName);
+    sheet.columns=s.columns.map(c=>({...c,width:c.width || 24}));
+    for(const row of s.rows)sheet.addRow(Object.fromEntries(s.columns.map(c=>[c.key,row[c.key] ?? ''])));
+    sheet.getRow(1).font={bold:true};
+    sheet.views=[{state:'frozen',ySplit:1}];
+  }
   const buffer=await workbook.xlsx.writeBuffer();
   const url=URL.createObjectURL(new Blob([buffer as BlobPart],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
   const link=document.createElement('a');link.href=url;link.download=`${filename}.xlsx`;link.click();

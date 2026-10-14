@@ -69,7 +69,7 @@ export async function cancelDonHang(req: AuthRequest, res: Response) {
       await connection.beginTransaction();
 
       const [orderRows] = await connection.query(
-        'SELECT ma_don_hang, trang_thai FROM don_hang WHERE ma_don_hang = ? AND ma_tai_khoan = ? FOR UPDATE',
+        'SELECT ma_don_hang, trang_thai, ma_voucher FROM don_hang WHERE ma_don_hang = ? AND ma_tai_khoan = ? FOR UPDATE',
         [id, req.user.ma_tai_khoan],
       );
       const order = (orderRows as any[])[0];
@@ -98,6 +98,21 @@ export async function cancelDonHang(req: AuthRequest, res: Response) {
           'UPDATE san_pham SET so_luong = so_luong + ? WHERE ma_san_pham = ?',
           [item.so_luong, item.ma_san_pham],
         );
+      }
+
+      // Restore voucher if this order used one
+      if (order.ma_voucher) {
+        await connection.execute('UPDATE voucher_su_dung SET hoan_luot = 1 WHERE ma_don_hang = ?', [id]);
+        await connection.execute('UPDATE voucher SET da_dung = GREATEST(0, da_dung - 1) WHERE ma_voucher = ?', [order.ma_voucher]);
+        try {
+          await connection.execute(
+            `UPDATE tai_khoan_voucher
+             SET da_dung = GREATEST(0, da_dung - 1), trang_thai = 'ChuaDung'
+             WHERE ma_tai_khoan = ? AND ma_voucher = ? AND trang_thai = 'DaDung'
+             ORDER BY ngay_nhan DESC LIMIT 1`,
+            [req.user.ma_tai_khoan, order.ma_voucher]
+          );
+        } catch {}
       }
 
       await connection.execute(

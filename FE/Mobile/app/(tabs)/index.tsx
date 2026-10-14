@@ -80,8 +80,65 @@ export default function HomeScreen() {
 <MaterialIcons name="blender" size={116} color="#AFCDA6" style={styles.heroIcon} />
         </View>
 
-        <View style={styles.promise}><MaterialIcons name="electric-bolt" size={18} color={shop.primary} /><Text style={styles.promiseText}>Tiện ích cho nhà · Cảm hứng cho cuộc sống</Text></View>
-        <Link href="/vouchers" asChild><Pressable accessibilityRole="button" accessibilityLabel="Voucher" style={styles.bottomBanner}><MaterialIcons name="local-offer" size={28} color={shop.primary} /><View style={{ flex: 1 }}><Text style={styles.bottomTitle}>Voucher</Text><Text style={styles.bottomText}>Xem mã giảm giá dành cho bạn</Text></View><MaterialIcons name="chevron-right" size={24} color={shop.primary} /></Pressable></Link>
+        {/* Gamification Action Strip */}
+        <View style={styles.rewardStrip}>
+          <Link href={'/rewards' as any} asChild>
+            <Pressable style={styles.rewardActionBtn}>
+              <View style={[styles.rewardIconWrap, { backgroundColor: '#EAF8F0' }]}>
+                <MaterialIcons name="event-available" size={24} color="#176B52" />
+                <View style={styles.miniBadge}><Text style={styles.miniBadgeText}>+100X</Text></View>
+              </View>
+              <Text style={styles.rewardActionText}>Điểm danh</Text>
+            </Pressable>
+          </Link>
+
+          <Link href={'/referral' as any} asChild>
+            <Pressable style={styles.rewardActionBtn}>
+              <View style={[styles.rewardIconWrap, { backgroundColor: '#FFF2E8' }]}>
+                <MaterialIcons name="group-add" size={24} color="#D97706" />
+                <View style={[styles.miniBadge, { backgroundColor: '#EA580C' }]}><Text style={styles.miniBadgeText}>50K</Text></View>
+              </View>
+              <Text style={styles.rewardActionText}>Mời bạn bè</Text>
+            </Pressable>
+          </Link>
+
+          <Link href={'/rewards' as any} asChild>
+            <Pressable style={styles.rewardActionBtn}>
+              <View style={[styles.rewardIconWrap, { backgroundColor: '#F2EEFF' }]}>
+                <MaterialIcons name="attractions" size={24} color="#7C3AED" />
+                <View style={[styles.miniBadge, { backgroundColor: '#8B5CF6' }]}><Text style={styles.miniBadgeText}>Hot</Text></View>
+              </View>
+              <Text style={styles.rewardActionText}>Vòng quay</Text>
+            </Pressable>
+          </Link>
+
+          <Link href="/vouchers" asChild>
+            <Pressable style={styles.rewardActionBtn}>
+              <View style={[styles.rewardIconWrap, { backgroundColor: '#EAF5FF' }]}>
+                <MaterialIcons name="local-offer" size={24} color="#0284C7" />
+              </View>
+              <Text style={styles.rewardActionText}>Voucher</Text>
+            </Pressable>
+          </Link>
+        </View>
+
+        {/* Retention Banner */}
+        <Link href={'/rewards' as any} asChild>
+          <Pressable style={styles.retentionBanner}>
+            <View style={styles.retentionIconWrap}>
+              <MaterialIcons name="stars" size={30} color="#DDF3A3" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.retentionTitle}>Điểm danh nhận Xu & Quà khủng</Text>
+              <Text style={styles.retentionSub}>Chuỗi ngày tích lũy nhận voucher tới 100K</Text>
+            </View>
+            <View style={styles.retentionCta}>
+              <Text style={styles.retentionCtaText}>Nhận ngay</Text>
+              <MaterialIcons name="chevron-right" size={18} color="#183C35" />
+            </View>
+          </Pressable>
+        </Link>
+
         <SectionHeader title="Góc nhà của bạn" action="Xem tất cả" href="/products" />
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryRow}>
           {Array.from(new Set(products.map(p => p.ten_danh_muc).filter((name): name is string => Boolean(name)))).map((label, index) => ({ ...fallbackCategories[index % fallbackCategories.length], label })).map((category) => (
@@ -148,4 +205,16 @@ const styles = StyleSheet.create({
   bottomBanner: { backgroundColor: shop.soft, padding: 20, borderRadius: 22, flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 24 },
   bottomTitle: { color: shop.ink, fontSize: 14, fontWeight: '700' },
   bottomText: { color: shop.muted, fontSize: 12, marginTop: 5 },
+  rewardStrip: { flexDirection: 'row', justifyContent: 'space-between', backgroundColor: '#fff', borderRadius: 22, paddingVertical: 14, paddingHorizontal: 12, marginTop: 16, borderWidth: 1, borderColor: shop.border },
+  rewardActionBtn: { alignItems: 'center', flex: 1 },
+  rewardIconWrap: { width: 48, height: 48, borderRadius: 18, alignItems: 'center', justifyContent: 'center', position: 'relative' },
+  miniBadge: { position: 'absolute', top: -4, right: -6, backgroundColor: '#176B52', borderRadius: 10, paddingHorizontal: 5, paddingVertical: 2 },
+  miniBadgeText: { color: '#fff', fontSize: 8, fontWeight: '800' },
+  rewardActionText: { color: shop.ink, fontSize: 11, fontWeight: '700', marginTop: 6 },
+  retentionBanner: { backgroundColor: '#183C35', borderRadius: 22, padding: 16, flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 14 },
+  retentionIconWrap: { width: 48, height: 48, borderRadius: 18, backgroundColor: '#2C5140', alignItems: 'center', justifyContent: 'center' },
+  retentionTitle: { color: '#fff', fontSize: 13, fontWeight: '800' },
+  retentionSub: { color: '#CFDBD0', fontSize: 11, marginTop: 3 },
+  retentionCta: { backgroundColor: '#DDF3A3', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12, flexDirection: 'row', alignItems: 'center', gap: 2 },
+  retentionCtaText: { color: '#183C35', fontSize: 11, fontWeight: '800' },
 });

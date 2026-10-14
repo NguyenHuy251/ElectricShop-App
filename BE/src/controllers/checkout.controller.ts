@@ -71,10 +71,17 @@ export async function createDonHang(req: AuthRequest, res: Response) {
       const quote = await priceCheckout(connection, summarizeCart(items),input.ma_code,true,req.user.ma_tai_khoan);
       if (!quote.can_checkout) throw new CheckoutError(409, quote.issues.join(' '));
       if (quote.snapshot !== input.snapshot) throw new CheckoutError(409, 'Giá hoặc giỏ hàng đã thay đổi. Vui lòng cập nhật và kiểm tra lại trước khi đặt hàng.');
+      let salesStaffId: number | null = null;
+      try {
+        const [staffRows] = await connection.query(
+          "SELECT ma_nhan_vien FROM nhan_vien WHERE trang_thai = 'DangLam' AND (chuc_vu LIKE '%bán hàng%' OR chuc_vu LIKE '%Thu ngân%' OR chuc_vu IS NOT NULL) ORDER BY RAND() LIMIT 1"
+        );
+        salesStaffId = (staffRows as { ma_nhan_vien: number }[])[0]?.ma_nhan_vien || null;
+      } catch {}
       const [result] = await connection.execute(
-        `INSERT INTO don_hang (ma_tai_khoan, ho_ten_nguoi_nhan, so_dien_thoai, dia_chi_giao_hang, tong_tien, phuong_thuc_thanh_toan, trang_thai, ghi_chu, ngay_dat, ma_voucher, ma_code, giam_gia, phi_giao_hang)
-         VALUES (?, ?, ?, ?, ?, ?, 'ChoXacNhan', ?, NOW(), ?, ?, ?, ?)`,
-        [req.user.ma_tai_khoan, input.ho_ten_nguoi_nhan, input.so_dien_thoai, input.dia_chi_giao_hang, quote.tong_tien, input.phuong_thuc_thanh_toan, input.ghi_chu || null,quote.ma_voucher,quote.ma_code || null,quote.giam_gia,quote.phi_giao_hang]);
+        `INSERT INTO don_hang (ma_tai_khoan, ho_ten_nguoi_nhan, so_dien_thoai, dia_chi_giao_hang, tong_tien, phuong_thuc_thanh_toan, trang_thai, ghi_chu, ngay_dat, ma_voucher, ma_code, giam_gia, phi_giao_hang, ma_nhan_vien)
+         VALUES (?, ?, ?, ?, ?, ?, 'ChoXacNhan', ?, NOW(), ?, ?, ?, ?, ?)`,
+        [req.user.ma_tai_khoan, input.ho_ten_nguoi_nhan, input.so_dien_thoai, input.dia_chi_giao_hang, quote.tong_tien, input.phuong_thuc_thanh_toan, input.ghi_chu || null,quote.ma_voucher,quote.ma_code || null,quote.giam_gia,quote.phi_giao_hang, salesStaffId]);
       const orderId = (result as { insertId: number }).insertId;
       await recordVoucherUsage(connection,orderId,req.user.ma_tai_khoan,quote);
       for (const item of items) {
