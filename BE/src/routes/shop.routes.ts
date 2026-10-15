@@ -139,10 +139,17 @@ router.post('/vouchers/grant', authorizePermission('vouchers'), run(async (req, 
     throw new CheckoutError(404, 'Mã giảm giá không tồn tại.');
   }
 
-  // 3. Kích hoạt voucher vào ví của tài khoản đó
+  // 3. Đếm số lượt đang còn trong ví trước khi cấp (voucher giống nhau không bị ghi đè mà cộng dồn)
+  const [ownedRows] = await pool.query(
+    "SELECT COUNT(*) AS so_luot FROM tai_khoan_voucher WHERE ma_tai_khoan = ? AND ma_voucher = ? AND trang_thai = 'ChuaDung' AND ngay_het_han >= NOW()",
+    [targetUser.ma_tai_khoan, voucher.ma_voucher]
+  );
+  const ownedCopies = Number((ownedRows as any[])[0]?.so_luot || 0);
+
+  // 4. Kích hoạt voucher vào ví của tài khoản đó
   await grantVoucherToUser(pool, targetUser.ma_tai_khoan, voucher.ma_code, 'AdminCapRieng', expiryDays);
 
-  return sendSuccess(res, `Đã kích hoạt thành công voucher ${voucher.ma_code} cho khách hàng ${targetUser.ho_ten || targetUser.ten_dang_nhap} (${targetUser.so_dien_thoai || targetUser.ten_dang_nhap})!`, {
+  return sendSuccess(res, `Đã kích hoạt thành công voucher ${voucher.ma_code} cho khách hàng ${targetUser.ho_ten || targetUser.ten_dang_nhap} (${targetUser.so_dien_thoai || targetUser.ten_dang_nhap})!${ownedCopies ? ` Khách hàng đang có tổng ${ownedCopies + 1} lượt dùng mã này trong ví.` : ''}`, {
     ma_tai_khoan: targetUser.ma_tai_khoan,
     ho_ten: targetUser.ho_ten,
     ten_dang_nhap: targetUser.ten_dang_nhap,

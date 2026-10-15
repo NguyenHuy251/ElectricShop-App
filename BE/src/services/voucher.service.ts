@@ -101,7 +101,22 @@ export async function customerVouchers(accountId: number, subtotal?: number) {
   // Deduplicate vouchers by code (prioritize personal claimed version)
   const combinedMap = new Map<string, any>();
 
+  // Gộp các bản sao trùng mã VÀ cùng hạn sử dụng thành một entry (kèm số lượt);
+  // bản sao có hạn dùng khác nhau thì hiển thị riêng theo hạn của từng nhóm.
+  const walletAgg = new Map<string, { item: any; copies: number; expiry: Date | null; sources: Set<string> }>();
   for (const item of (walletRows as any[])) {
+    const expiry = item.ngay_het_han ? new Date(item.ngay_het_han) : null;
+    const groupKey = `${item.ma_code}|${expiry ? expiry.toISOString() : String(item.ket_thuc ?? '')}`;
+    const existing = walletAgg.get(groupKey);
+    if (existing) {
+      existing.copies += 1;
+      existing.sources.add(mapNguonGoc(item.nguon_goc));
+      continue;
+    }
+    walletAgg.set(groupKey, { item, copies: 1, expiry, sources: new Set([mapNguonGoc(item.nguon_goc)]) });
+  }
+
+  for (const { item, copies, expiry, sources } of walletAgg.values()) {
     const raw = {
       ...item,
       da_dung: Math.max(Number(item.da_dung || 0), Number(item.da_dung_thuc_te || 0)),
@@ -115,11 +130,12 @@ export async function customerVouchers(accountId: number, subtotal?: number) {
       loai: item.loai || 'SoTien',
       giam_toi_da: item.giam_toi_da == null ? null : Number(item.giam_toi_da),
       don_toi_thieu: Number(item.don_toi_thieu),
-      ket_thuc: item.ngay_het_han || item.ket_thuc,
+      ket_thuc: expiry || item.ket_thuc,
+      so_luong: copies,
       co_the_dung: !reason,
       ly_do: reason,
       la_cong_khai: false,
-      nguon_goc: mapNguonGoc(item.nguon_goc),
+      nguon_goc: Array.from(sources).join(', '),
       mo_ta: item.mo_ta || null,
     });
   }
@@ -144,6 +160,7 @@ export async function customerVouchers(accountId: number, subtotal?: number) {
       giam_toi_da: item.giam_toi_da == null ? null : Number(item.giam_toi_da),
       don_toi_thieu: Number(item.don_toi_thieu),
       ket_thuc: item.ket_thuc,
+      so_luong: 1,
       co_the_dung: !reason,
       ly_do: reason,
       la_cong_khai: true,

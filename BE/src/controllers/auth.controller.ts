@@ -82,7 +82,6 @@ export async function register(req: Request, res: Response) {
     const insertResult = result[0] as { insertId: number };
     const newAccountId = insertResult.insertId;
 
-    // Sinh mã giới thiệu cho tài khoản mới (trước đây chỉ có migration backfill nên tài khoản mới mãi hiển thị "Đang cập nhật")
     let maGioiThieu: string | null = null;
     for (let attempt = 0; attempt < 5 && !maGioiThieu; attempt++) {
       try {
@@ -90,7 +89,6 @@ export async function register(req: Request, res: Response) {
         await pool.execute('UPDATE tai_khoan SET ma_gioi_thieu = ? WHERE ma_tai_khoan = ?', [candidate, newAccountId]);
         maGioiThieu = candidate;
       } catch {
-        // trùng mã (UNIQUE), thử lại với mã khác
       }
     }
 
