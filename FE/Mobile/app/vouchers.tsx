@@ -157,7 +157,7 @@ export default function VouchersScreen() {
         ) : filteredVouchers.length ? (
           <View style={styles.voucherList}>
             {filteredVouchers.map(v => (
-              <VoucherCard key={v.ma_voucher} voucher={v} />
+              <VoucherCard key={`${v.ma_voucher}:${v.ket_thuc}`} voucher={v} />
             ))}
           </View>
         ) : (

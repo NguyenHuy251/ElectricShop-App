@@ -33,6 +33,11 @@ export function VoucherCard({ voucher, selected, disabled, onSelect }: {
         <View style={styles.headerRow}>
           <View style={styles.codeWrap}>
             <Text style={styles.codeText}>{voucher.ma_code}</Text>
+            {(voucher.so_luong ?? 1) > 1 ? (
+              <View style={styles.badgeQty}>
+                <Text style={styles.badgeQtyText}>x{voucher.so_luong} lượt</Text>
+              </View>
+            ) : null}
             {voucher.nguon_goc ? (
               <View style={[styles.badge, voucher.la_cong_khai ? styles.badgePublic : styles.badgePrivate]}>
                 <Text style={styles.badgeText}>{voucher.nguon_goc}</Text>
@@ -178,6 +183,17 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
     color: '#183C35',
+  },
+  badgeQty: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+    backgroundColor: '#D7F0E4',
+  },
+  badgeQtyText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#176B52',
   },
   discountText: {
     fontSize: 16,

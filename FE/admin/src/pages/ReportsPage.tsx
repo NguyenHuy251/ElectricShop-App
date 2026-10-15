@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { App, Button, Dropdown, Empty, Input, Progress, Select, Space, Spin, Table, Tabs, Tag, Tooltip } from 'antd';
 import type { MenuProps } from 'antd';
@@ -185,6 +185,19 @@ const monthLabel = (value: string) => {
 
 const dateLabel = (value: string) => (value ? value.split('-').reverse().join('/') : '');
 
+const normalizeText = (value: string) =>
+  value
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd');
+
+const localDayKey = (value: string | Date) => {
+  const d = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(d.getTime())) return '';
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
 const formatDateTime = (value: string) => {
   if (!value) return '—';
   try {
@@ -202,6 +215,10 @@ export default function ReportsPage() {
   const [status, setStatus] = useState<string>('all');
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState('overview');
+  const [salesProduct, setSalesProduct] = useState<string | undefined>(undefined);
+  const [salesDay, setSalesDay] = useState('');
+  const [purchaseProduct, setPurchaseProduct] = useState<string | undefined>(undefined);
+  const [purchaseDay, setPurchaseDay] = useState('');
 
   const [range, setRange] = useState<{
     from: string;
@@ -254,6 +271,42 @@ export default function ReportsPage() {
   const bestsellers = data?.bestsellers || [];
   const stock = data?.low_stock || [];
   const staffList = data?.staff_list || [];
+
+  const salesProductOptions = useMemo(() => {
+    const names = new Set(salesDetails.map(row => row.ten_san_pham).filter(Boolean));
+    return Array.from(names)
+      .sort((a, b) => a.localeCompare(b, 'vi'))
+      .map(name => ({ label: name, value: name }));
+  }, [salesDetails]);
+
+  const salesFiltersActive = Boolean(salesProduct) || Boolean(salesDay);
+
+  const filteredSalesDetails = useMemo(() => {
+    const keyword = salesProduct ? normalizeText(salesProduct) : '';
+    return salesDetails.filter(row => {
+      if (keyword && !normalizeText(row.ten_san_pham || '').includes(keyword)) return false;
+      if (salesDay && localDayKey(row.ngay_dat) !== salesDay) return false;
+      return true;
+    });
+  }, [salesDetails, salesProduct, salesDay]);
+
+  const purchaseProductOptions = useMemo(() => {
+    const names = new Set(purchaseDetails.map(row => row.ten_san_pham).filter(Boolean));
+    return Array.from(names)
+      .sort((a, b) => a.localeCompare(b, 'vi'))
+      .map(name => ({ label: name, value: name }));
+  }, [purchaseDetails]);
+
+  const purchaseFiltersActive = Boolean(purchaseProduct) || Boolean(purchaseDay);
+
+  const filteredPurchaseDetails = useMemo(() => {
+    const keyword = purchaseProduct ? normalizeText(purchaseProduct) : '';
+    return purchaseDetails.filter(row => {
+      if (keyword && !normalizeText(row.ten_san_pham || '').includes(keyword)) return false;
+      if (purchaseDay && localDayKey(row.ngay_nhap) !== purchaseDay) return false;
+      return true;
+    });
+  }, [purchaseDetails, purchaseProduct, purchaseDay]);
 
   const ready = Boolean(data) && !result.loading;
 
@@ -473,7 +526,7 @@ export default function ReportsPage() {
         { header: 'Voucher', key: 'voucher_code', width: 14 },
         { header: 'Địa chỉ nhận', key: 'dia_chi_giao_hang', width: 35 },
       ],
-      salesDetails.map(s => ({
+      filteredSalesDetails.map(s => ({
         ...s,
         trang_thai: statusMap[s.trang_thai]?.label || s.trang_thai,
         phuong_thuc_thanh_toan: paymentMap[s.phuong_thuc_thanh_toan] || s.phuong_thuc_thanh_toan,
@@ -498,7 +551,7 @@ export default function ReportsPage() {
         { header: 'Tổng tiền nhập', key: 'thanh_tien', width: 20 },
         { header: 'Ghi chú', key: 'ghi_chu', width: 28 },
       ],
-      purchaseDetails.map(p => ({
+      filteredPurchaseDetails.map(p => ({
         ...p,
         ngay_nhap: formatDateTime(p.ngay_nhap),
         ten_bien_the: p.ten_bien_the || 'Tiêu chuẩn',
@@ -965,17 +1018,63 @@ export default function ReportsPage() {
                       <p>Hiển thị chi tiết nhân viên bán/phụ trách, khách hàng, sản phẩm & biến thể bán, giá bán, giá vốn và lợi nhuận gộp</p>
                     </div>
                     <Space wrap>
-                      <Tag color="cyan">Tổng: {salesDetails.length} dòng sản phẩm</Tag>
+                      <Tag color="cyan">
+                        Tổng: {filteredSalesDetails.length}
+                        {salesFiltersActive ? `/${salesDetails.length}` : ''} dòng sản phẩm
+                      </Tag>
                       <Button icon={<DownloadOutlined />} onClick={handleExportSales}>
                         Xuất Excel Bán hàng
                       </Button>
                     </Space>
                   </div>
 
+                  <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', gap: 12, margin: '2px 0 16px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                      <span style={{ fontSize: 12, color: '#718379' }}>Tên sản phẩm bán được</span>
+                      <Select
+                        showSearch
+                        allowClear
+                        placeholder="Chọn sản phẩm đã bán"
+                        style={{ width: 280 }}
+                        value={salesProduct}
+                        onChange={val => setSalesProduct(val ?? undefined)}
+                        options={salesProductOptions}
+                        optionFilterProp="label"
+                        notFoundContent="Chưa có sản phẩm nào được bán"
+                      />
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                      <span style={{ fontSize: 12, color: '#718379' }}>Bán trong ngày</span>
+                      <Space>
+                        <Input
+                          type="date"
+                          aria-label="Lọc đơn bán trong một ngày"
+                          style={{ width: 165, height: 32 }}
+                          value={salesDay}
+                          onChange={e => setSalesDay(e.target.value)}
+                        />
+                        <Button style={{ height: 32 }} onClick={() => setSalesDay(localDayKey(new Date()))}>
+                          Hôm nay
+                        </Button>
+                      </Space>
+                    </div>
+                    {salesFiltersActive ? (
+                      <Button
+                        style={{ height: 32 }}
+                        onClick={() => {
+                          setSalesProduct(undefined);
+                          setSalesDay('');
+                        }}
+                      >
+                        Xóa lọc tab này
+                      </Button>
+                    ) : null}
+                  </div>
+
                   <Table<SalesDetail>
                     size="middle"
                     rowKey={(row, idx) => `${row.ma_don_hang}:${row.ma_san_pham}:${row.ma_bien_the || 0}:${idx}`}
-                    dataSource={salesDetails}
+                    dataSource={filteredSalesDetails}
                     pagination={printing ? false : { pageSize: 12, showSizeChanger: true, pageSizeOptions: ['12', '25', '50', '100'] }}
                     scroll={{ x: 1350 }}
                     locale={{ emptyText: 'Không tìm thấy dòng đơn hàng nào phù hợp bộ lọc' }}
@@ -1157,17 +1256,63 @@ export default function ReportsPage() {
                       <p>Hiển thị chi tiết nhân viên nào nhập, nhập biến thể gì, sản phẩm gì, số lượng, đơn giá nhập, tổng chi phí và nhà cung cấp</p>
                     </div>
                     <Space wrap>
-                      <Tag color="blue">Tổng: {purchaseDetails.length} phiếu nhập</Tag>
+                      <Tag color="blue">
+                        Tổng: {filteredPurchaseDetails.length}
+                        {purchaseFiltersActive ? `/${purchaseDetails.length}` : ''} phiếu nhập
+                      </Tag>
                       <Button icon={<DownloadOutlined />} onClick={handleExportPurchase}>
                         Xuất Excel Nhập hàng
                       </Button>
                     </Space>
                   </div>
 
+                  <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', gap: 12, margin: '2px 0 16px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                      <span style={{ fontSize: 12, color: '#718379' }}>Tên sản phẩm nhập về</span>
+                      <Select
+                        showSearch
+                        allowClear
+                        placeholder="Chọn sản phẩm đã nhập"
+                        style={{ width: 280 }}
+                        value={purchaseProduct}
+                        onChange={val => setPurchaseProduct(val ?? undefined)}
+                        options={purchaseProductOptions}
+                        optionFilterProp="label"
+                        notFoundContent="Chưa có sản phẩm nào được nhập"
+                      />
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                      <span style={{ fontSize: 12, color: '#718379' }}>Nhập trong ngày</span>
+                      <Space>
+                        <Input
+                          type="date"
+                          aria-label="Lọc phiếu nhập trong một ngày"
+                          style={{ width: 165, height: 32 }}
+                          value={purchaseDay}
+                          onChange={e => setPurchaseDay(e.target.value)}
+                        />
+                        <Button style={{ height: 32 }} onClick={() => setPurchaseDay(localDayKey(new Date()))}>
+                          Hôm nay
+                        </Button>
+                      </Space>
+                    </div>
+                    {purchaseFiltersActive ? (
+                      <Button
+                        style={{ height: 32 }}
+                        onClick={() => {
+                          setPurchaseProduct(undefined);
+                          setPurchaseDay('');
+                        }}
+                      >
+                        Xóa lọc tab này
+                      </Button>
+                    ) : null}
+                  </div>
+
                   <Table<PurchaseDetail>
                     size="middle"
                     rowKey="ma_nhap"
-                    dataSource={purchaseDetails}
+                    dataSource={filteredPurchaseDetails}
                     pagination={printing ? false : { pageSize: 12, showSizeChanger: true, pageSizeOptions: ['12', '25', '50', '100'] }}
                     scroll={{ x: 1250 }}
                     locale={{ emptyText: 'Không tìm thấy phiếu nhập hàng nào phù hợp bộ lọc' }}

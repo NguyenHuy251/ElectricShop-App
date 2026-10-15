@@ -8,6 +8,7 @@ export type CustomerVoucher = {
   giam_toi_da: number | null;
   don_toi_thieu: number;
   ket_thuc: string;
+  so_luong?: number;
   co_the_dung: boolean;
   ly_do: string;
   la_cong_khai?: boolean;
